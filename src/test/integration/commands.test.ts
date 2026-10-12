@@ -63,6 +63,35 @@ describe("code2pdf", () => {
     }
   });
 
+  // First of the prints: like a real update from version 1, the first print comes right after
+  // activation (one of the two signs; the version 1 setting is the other)
+  it("tells a version 1 user what changed: in the install message, then once after printing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cliModule = require("../../cli") as { find: (setting: string) => Promise<unknown>; NotInstalled: new (l: string[], f: boolean) => Error };
+    const realFind = cliModule.find;
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    await config.update("whitelisted_file_names", ["README.md"], vscode.ConfigurationTarget.Workspace);  // a version 1 setting
+    try {
+      cliModule.find = () => Promise.reject(new cliModule.NotInstalled(["code2pdf"], false));
+      await config.update("executable", "", vscode.ConfigurationTarget.Global);  // forget the code2pdf found earlier
+      const before = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
+      assert.ok(before.some((m) => m.startsWith("Version 2 of this extension prints with the code2pdf command-line tool instead of Vim and Ghostscript")),
+        before.join(" | "));
+      assert.ok(!before.some((m) => m.startsWith("code2pdf 2.0:")), "no note before anything is printed");
+
+      cliModule.find = realFind;  // now it's installed
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+      const first = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
+      assert.equal(first.filter((m) => m.startsWith("code2pdf 2.0: you now choose where each PDF goes")).length, 1, first.join(" | "));
+      const second = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
+      assert.ok(!second.some((m) => m.startsWith("code2pdf 2.0:")), "only once");
+    } finally {
+      cliModule.find = realFind;
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+      await config.update("whitelisted_file_names", undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
   it("prints a file", async () => {
     const pdf = await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/app.py"));
     assert.equal(path.basename(pdf), "app.pdf");
@@ -265,6 +294,11 @@ describe("code2pdf", () => {
   it("the install command says when code2pdf is already installed", async () => {
     const shown = await messages(() => vscode.commands.executeCommand("code2pdf.install"));
     assert.ok(shown.some((m) => /^code2pdf \S+ is installed \(/.test(m)), shown.join(" | "));
+  });
+
+  it("the old \"Print All\" command is found by its words", () => {
+    const commands = vscode.extensions.getExtension("readbysearch.code2pdf")?.packageJSON.contributes.commands as { command: string; title: string }[];
+    assert.match(commands.find((c) => c.command === "code2pdf.printWorkspace")?.title ?? "", /^Print All /);
   });
 
   it("says what to do outside a git repository", async () => {

@@ -17,6 +17,10 @@ README.md only.
 - `src/progress.ts`: reads code2pdf's stderr (`[2/3] … (50%)`, `Done: N pages`, `Warning:`,
   `Note:`, `Error:`); `-s` reports on stdout.
 - `src/install.ts`: install and update commands per platform and install kind.
+- `src/upgrade.ts`: telling version 1 users what changed, once. VS Code doesn't say what an
+  update came from, so it's inferred: version 1 settings set, or the first print is what
+  activated the extension for the first time (a fresh Marketplace install opens the walkthrough,
+  which activates it earlier).
 - Getting code2pdf: the `start` walkthrough opens on install (`onWalkthrough:start` activates
   the extension; its first step completes on the `code2pdf.installed` context, which
   `checkInstalled()` sets). An install started from a message or `code2pdf.install` runs in a

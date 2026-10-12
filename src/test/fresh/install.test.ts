@@ -10,6 +10,43 @@ import * as vscode from "vscode";
 
 type Window = Record<string, unknown>;
 
+/** Shell integration (VS Code 1.93+, not in this extension's 1.90 types): what ran in the terminal. */
+interface Execution {
+  commandLine: { value: string };
+  read(): AsyncIterable<string>;
+}
+interface ShellEvents {
+  onDidStartTerminalShellExecution?: vscode.Event<{ execution: Execution }>;
+  onDidEndTerminalShellExecution?: vscode.Event<{ execution: Execution; exitCode: number | undefined }>;
+}
+
+/** Logs every command run in a terminal, its output and exit code; failed() says if one failed. */
+function watchTerminals(): { failed: () => string | undefined; dispose: () => void } {
+  const events = vscode.window as unknown as ShellEvents;
+  const subscriptions: vscode.Disposable[] = [];
+  let failure: string | undefined;
+  if (events.onDidStartTerminalShellExecution) {
+    subscriptions.push(events.onDidStartTerminalShellExecution(async ({ execution }) => {
+      console.log(`[terminal] $ ${execution.commandLine.value}`);
+      for await (const data of execution.read()) {
+        // eslint-disable-next-line no-control-regex
+        process.stdout.write(data.replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g, ""));
+      }
+    }));
+  } else {
+    console.log("[terminal] no shell integration events in this VS Code");
+  }
+  if (events.onDidEndTerminalShellExecution) {
+    subscriptions.push(events.onDidEndTerminalShellExecution(({ execution, exitCode }) => {
+      console.log(`[terminal] exit ${exitCode}: ${execution.commandLine.value}`);
+      if (exitCode !== undefined && exitCode !== 0) {
+        failure = `"${execution.commandLine.value}" exited with ${exitCode}`;
+      }
+    }));
+  }
+  return { failed: () => failure, dispose: () => subscriptions.forEach((d) => d.dispose()) };
+}
+
 function onPath(command: string): boolean {
   try {
     execFileSync("sh", ["-c", `command -v ${command}`], { stdio: "ignore" });
@@ -41,17 +78,26 @@ describe("first print without code2pdf (fresh machine)", () => {
       console.log(`[info] ${message} [${buttons.join(" | ")}]`);
       return Promise.resolve(buttons.includes("Print Now") ? "Print Now" : undefined);  // click Print Now
     };
+    const terminals = watchTerminals();
     try {
       const first = await vscode.commands.executeCommand<string>("code2pdf.printFile", vscode.Uri.file(path.join(project, "src/util.py")));
       assert.equal(first, undefined, "nothing printed before code2pdf is installed");
       assert.match(warnings[0]?.message ?? "", /isn't installed/);
       console.log(`Clicked "${warnings[0].buttons[0]}"; waiting for the terminal to install code2pdf…`);
       const started = Date.now();
-      while (!fs.existsSync(pdf) && Date.now() - started < 28 * 60_000) {
+      let lastReport = started;
+      while (!fs.existsSync(pdf) && !terminals.failed() && Date.now() - started < 28 * 60_000) {
         await new Promise((r) => setTimeout(r, 2000));
+        if (Date.now() - lastReport > 60_000) {
+          lastReport = Date.now();
+          const t = vscode.window.terminals.map((x) => `${x.name} (exit ${x.exitStatus?.code ?? "-"}, shell integration ${"shellIntegration" in x && x.shellIntegration ? "on" : "off"})`);
+          console.log(`… ${Math.round((Date.now() - started) / 1000)} s; terminals: ${t.join(", ") || "none"}`);
+        }
       }
+      assert.equal(terminals.failed(), undefined, "the install command failed");
       console.log(`PDF after ${Math.round((Date.now() - started) / 1000)} s: ${fs.existsSync(pdf)}`);
     } finally {
+      terminals.dispose();
       window.showWarningMessage = original.warning;
       window.showInformationMessage = original.info;
     }

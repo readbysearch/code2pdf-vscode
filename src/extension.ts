@@ -8,6 +8,7 @@ import * as git from "./git";
 import { INSTALL_GUIDE, installCommand, parseOsRelease, updateCommand } from "./install";
 import { type OutputReader, withElapsed } from "./progress";
 import * as specs from "./specs";
+import * as upgrade from "./upgrade";
 
 let log: vscode.OutputChannel;
 let state: vscode.Memento;
@@ -16,6 +17,12 @@ let found: cli.Code2pdf | undefined;
 let lastPrint: { id: string; args: unknown[] } | undefined;
 /** Checks every few seconds whether an install started from here has finished. */
 let installWatch: NodeJS.Timeout | undefined;
+/** For telling version 1 users what changed (see upgrade.ts). */
+let activatedAt = 0;
+let firstActivation = false;
+let commandsRun = 0;
+let fromVersion1 = false;
+const NOTE_SHOWN = "version1NoteShown";
 
 /** A print, ready to run. */
 interface Job {
@@ -38,10 +45,14 @@ class Stop extends Error {
 export function activate(context: vscode.ExtensionContext) {
   log = vscode.window.createOutputChannel("code2pdf");
   state = context.globalState;
+  activatedAt = Date.now();
+  firstActivation = !state.get<boolean>("activated");
+  void state.update("activated", true);
   // Each returns the PDF's path, or undefined if nothing was printed
   const register = (id: string, handler: (...a: never[]) => Promise<string | undefined>) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, (...a: unknown[]) => {
       lastPrint = { id, args: a };
+      noteVersion1User();
       return guard(() => handler(...(a as never[])));
     }));
   register("code2pdf.print", printResources);
@@ -69,6 +80,35 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+/** At the start of each print command: does this look like someone updated from version 1? */
+function noteVersion1User(): void {
+  const legacy = settings().print.legacy;
+  const version1Settings = Object.values(legacy).some((v) => (Array.isArray(v) ? v.length > 0 : Boolean(v?.trim())));
+  fromVersion1 = fromVersion1 || upgrade.cameFromVersion1({
+    noteShown: Boolean(state.get<boolean>(NOTE_SHOWN)),
+    version1Settings,
+    firstActivation,
+    firstCommand: commandsRun++ === 0,
+    msSinceActivation: Date.now() - activatedAt,
+  });
+}
+
+/** Once, after a version 1 user's first print: what changed. */
+function showVersion1Note(): void {
+  if (!fromVersion1) {
+    return;
+  }
+  fromVersion1 = false;
+  void state.update(NOTE_SHOWN, true);
+  void show("info", upgrade.NOTE, "What's New", "Settings").then((choice) => {
+    if (choice === "What's New") {
+      void vscode.env.openExternal(vscode.Uri.parse(upgrade.WHATS_NEW));
+    } else if (choice === "Settings") {
+      void vscode.commands.executeCommand("workbench.action.openSettings", "code2pdf");
+    }
+  });
+}
 
 /** Runs a command and reports every failure, so nothing fails silently. Returns the PDF's path. */
 async function guard(command: () => Promise<string | undefined>): Promise<string | undefined> {
@@ -192,13 +232,14 @@ function howToInstall(old?: cli.Code2pdf): { install?: { label: string; command:
     release = undefined;
   }
   const install = installCommand(process.platform, hasBrew(), release);
+  const intro = fromVersion1 ? upgrade.INSTALL_INTRO : "This extension prints with the code2pdf command-line tool, which isn't installed.";
   if (install) {
-    return { install, message: `This extension prints with the code2pdf command-line tool, which isn't installed. It installs ${install.how}, in a terminal.` };
+    return { install, message: `${intro} It installs ${install.how}, in a terminal.` };
   }
   if (process.platform === "darwin") {
-    return { message: "This extension prints with the code2pdf command-line tool, which isn't installed. It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run \"code2pdf: Install the Command-Line Tool\"." };
+    return { message: `${intro} It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run "code2pdf: Install the Command-Line Tool".` };
   }
-  return { message: "This extension prints with the code2pdf command-line tool, which isn't installed." };
+  return { message: intro };
 }
 
 function hasBrew(): boolean {
@@ -699,6 +740,7 @@ async function execute(job: Job): Promise<string | undefined> {
     return undefined;
   }
   await finished(job.output, result.reader);
+  showVersion1Note();
   return job.output;
 }
 

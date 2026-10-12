@@ -84,4 +84,6 @@ jobs:
           brew install poppler
           npm ci
           npx tsc -p .
-          CODE2PDF_TEST_FILES='out/test/fresh/*.test.js' npx vscode-test
+          CODE2PDF_TEST_FILES='out/test/fresh/*.test.js' npx vscode-test || {
+            echo "== Homebrew after the test"; brew list --versions code2pdf || true; ls -la /opt/homebrew/bin/code2pdf || true
+            ls -lt ~/Library/Logs/Homebrew 2>/dev/null | head; exit 1; }

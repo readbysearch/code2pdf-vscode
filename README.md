@@ -78,10 +78,28 @@ Put `include` and `exclude` in a workspace's `.vscode/settings.json` to set them
 
 ### Coming from version 1
 
-Version 1 drew PDFs with Vim and Ghostscript. Version 2 uses code2pdf instead, which you
-install once (see above). The old settings (`blacklisted_folders`, `whitelisted_file_extensions`
-and so on) still work if you set them. You no longer need them: code2pdf's default selection
-covers common source code, and `include` and `exclude` cover the rest.
+Version 2 is a new extension under the same name, and VS Code updates to it on its own. What's
+different:
+
+- **It needs the code2pdf tool** instead of Vim, Ghostscript and jq. The first print offers to
+  install it.
+- **You choose where each PDF goes.** Version 1 saved `merged.pdf` (or `<file>.pdf`) into the
+  project folder. To save into the project again without being asked, set
+  `code2pdf.outputFolder` to `.`. A folder's PDF is then named after the folder, such as
+  `shop.pdf`.
+- **More files are printed.** Version 1 printed only `.py` and `.sh` files, plus `README.md` and
+  `launch.json`. Version 2 prints all common source code, Markdown, YAML and TOML, and skips
+  build output, virtual environments and hidden folders. Use `code2pdf.exclude` to leave files
+  out.
+- **"Print All Src File to A Single PDF" is now "Print All Source Files to PDF".** Keybindings to
+  the old commands still work.
+- **The PDF opens when it's done.** Set `code2pdf.openWith` to `none` to turn that off.
+- **Your old settings still work** if you set them (`blacklisted_folders`,
+  `whitelisted_file_extensions` and so on). One difference: `blacklisted_folders` now adds to the
+  folders code2pdf skips (`node_modules`, `dist`, `out` and others) instead of replacing them.
+- **It no longer touches files it shouldn't.** Version 1 deleted the PDFs in `/tmp`, saved each
+  file it printed again (adding a final newline where one was missing), and left an empty file
+  behind for a name with a space in it.
 
 ## Also from code2pdf
 

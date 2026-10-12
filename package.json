@@ -75,7 +75,7 @@
       },
       {
         "command": "code2pdf.printWorkspace",
-        "title": "Print Workspace Folder to PDF",
+        "title": "Print All Source Files to PDF",
         "category": "code2pdf"
       },
       {
@@ -264,7 +264,7 @@
           {
             "id": "print",
             "title": "Print a folder, files or lines",
-            "description": "Right-click a folder or files in the Explorer and choose **Print to PDF**, or select lines and choose **Print Selection to PDF**. Each file keeps its path and its own line numbers.\n[Print the Workspace Folder](command:code2pdf.printWorkspace)",
+            "description": "Right-click a folder or files in the Explorer and choose **Print to PDF**, or select lines and choose **Print Selection to PDF**. Each file keeps its path and its own line numbers.\n[Print All Source Files](command:code2pdf.printWorkspace)",
             "media": {
               "image": "images/pages.png",
               "altText": "A contents page, a page of changes with the changed lines marked, and a page of code"
