@@ -45,7 +45,7 @@ npm run test:unit            # node:test; the code2pdf-backed tests skip if it i
 npx vscode-test              # integration, in a downloaded VS Code (.vscode-test/), on a git fixture
 VSCODE_TEST_VERSION=1.90.0 npx vscode-test   # the oldest VS Code in engines
 CODE2PDF_TEST_FILES='out/test/manual/*.test.js' npx vscode-test   # opens a PDF in the viewer
-docker run --rm -v "$PWD:/src:ro" ubuntu:24.04 bash /src/test/fresh-machine.sh   # first print, fresh machine
+npm run test:fresh           # first print on fresh Ubuntu 24.04 and 22.04 containers (needs Docker)
 ```
 
 `test/fresh-machine.sh` makes a container look like a fresh Ubuntu desktop (wget and python3;

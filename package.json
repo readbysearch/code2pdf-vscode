@@ -301,6 +301,7 @@
     "test:unit": "npm run compile && node --test \"out/test/unit/**/*.test.js\"",
     "test:integration": "npm run compile && vscode-test",
     "test": "npm run test:unit && npm run test:integration",
+    "test:fresh": "for v in 24.04 22.04; do docker run --rm -v \"$PWD:/src:ro\" ubuntu:$v bash /src/test/fresh-machine.sh || exit 1; done",
     "package": "vsce package"
   },
   "devDependencies": {

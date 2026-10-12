@@ -50,6 +50,7 @@ test("the download works with curl or wget, in any shell", { skip: process.platf
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "c2p-fetch-"));
   fs.writeFileSync(path.join(dir, "wget"), '#!/bin/sh\necho "wget $*"\n', { mode: 0o755 });
   const fetchPart = (installCommand("linux", false)?.command ?? "").match(/^bash -c '(if .*?fi)/)?.[1] ?? "";
-  const out = execFileSync("/bin/bash", ["-c", fetchPart], { env: { PATH: `${dir}:/bin` }, encoding: "utf8" });  // no curl here
+  // PATH has only the fake wget (on Ubuntu /bin is /usr/bin, which has curl)
+  const out = execFileSync("/bin/bash", ["-c", fetchPart], { env: { PATH: dir }, encoding: "utf8" });
   assert.match(out, /^wget -qO- https:\/\/raw\.githubusercontent\.com\/readbysearch\/code2pdf\/main\/install\.sh/);
 });
