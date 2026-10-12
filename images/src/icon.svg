@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- code2pdf's paper theme: ink #1c2541, mulberry, cobalt, fern, ochre; the ochre bar marks changed lines -->
+  <rect width="256" height="256" rx="44" fill="#1c2541"/>
+  <rect x="44" y="30" width="168" height="196" rx="12" fill="#ffffff"/>
+  <rect x="44" y="118" width="168" height="44" fill="#f8f0de"/>
+  <rect x="54" y="118" width="6" height="44" rx="2" fill="#8a5a00"/>
+  <g fill="#c3c6cb">
+    <rect x="68" y="53" width="12" height="6" rx="3"/>
+    <rect x="68" y="75" width="12" height="6" rx="3"/>
+    <rect x="68" y="97" width="12" height="6" rx="3"/>
+    <rect x="68" y="127" width="12" height="6" rx="3"/>
+    <rect x="68" y="147" width="12" height="6" rx="3"/>
+    <rect x="68" y="177" width="12" height="6" rx="3"/>
+    <rect x="68" y="199" width="12" height="6" rx="3"/>
+  </g>
+  <g>
+    <rect x="92" y="51" width="24" height="10" rx="5" fill="#7a1f4b"/>
+    <rect x="122" y="51" width="50" height="10" rx="5" fill="#1f4fa3"/>
+    <rect x="106" y="73" width="44" height="10" rx="5" fill="#1c2541"/>
+    <rect x="156" y="73" width="38" height="10" rx="5" fill="#2e6b3a"/>
+    <rect x="106" y="95" width="20" height="10" rx="5" fill="#7a1f4b"/>
+    <rect x="132" y="95" width="48" height="10" rx="5" fill="#1c2541"/>
+    <rect x="120" y="125" width="38" height="10" rx="5" fill="#1c2541"/>
+    <rect x="164" y="125" width="22" height="10" rx="5" fill="#8a5a00"/>
+    <rect x="120" y="145" width="66" height="10" rx="5" fill="#2e6b3a"/>
+    <rect x="106" y="175" width="30" height="10" rx="5" fill="#7a1f4b"/>
+    <rect x="142" y="175" width="34" height="10" rx="5" fill="#1c2541"/>
+    <rect x="92" y="197" width="54" height="10" rx="5" fill="#1f4fa3"/>
+  </g>
+</svg>

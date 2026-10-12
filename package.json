@@ -1,0 +1,262 @@
+{
+  "name": "code2pdf",
+  "displayName": "code2pdf: Print Code to PDF",
+  "description": "Print source code as a PDF made for reading: a contents page, syntax highlighting, real line numbers and a bookmark per file. Print a folder, chosen files, a selection, or what changed in git with the changed lines marked.",
+  "version": "2.0.0",
+  "publisher": "readbysearch",
+  "license": "AGPL-3.0-only",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1c2541",
+    "theme": "dark"
+  },
+  "homepage": "https://github.com/readbysearch/code2pdf-vscode#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/readbysearch/code2pdf-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/readbysearch/code2pdf-vscode/issues"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "pdf",
+    "print",
+    "printing",
+    "export",
+    "code review",
+    "git diff",
+    "line numbers",
+    "syntax highlighting"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "code2pdf runs git in the workspace, and a repository's git settings can run programs."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "code2pdf reads the files from disk."
+    }
+  },
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "code2pdf.print",
+        "title": "Print to PDF",
+        "category": "code2pdf"
+      },
+      {
+        "command": "code2pdf.chooseFiles",
+        "title": "Choose Files and Print to PDF…",
+        "category": "code2pdf"
+      },
+      {
+        "command": "code2pdf.printFile",
+        "title": "Print File to PDF",
+        "category": "code2pdf"
+      },
+      {
+        "command": "code2pdf.printSelection",
+        "title": "Print Selection to PDF",
+        "category": "code2pdf"
+      },
+      {
+        "command": "code2pdf.printWorkspace",
+        "title": "Print Workspace Folder to PDF",
+        "category": "code2pdf"
+      },
+      {
+        "command": "code2pdf.printChanges",
+        "title": "Print Changes to PDF…",
+        "category": "code2pdf"
+      },
+      {
+        "command": "extension.printFileToPdf",
+        "title": "Print File to PDF (old name)"
+      },
+      {
+        "command": "extension.printAll",
+        "title": "Print All Src File to A Single PDF (old name)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "code2pdf.print",
+          "when": "false"
+        },
+        {
+          "command": "code2pdf.printSelection",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "extension.printFileToPdf",
+          "when": "false"
+        },
+        {
+          "command": "extension.printAll",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "code2pdf.print",
+          "group": "7_code2pdf@1"
+        },
+        {
+          "command": "code2pdf.chooseFiles",
+          "when": "explorerResourceIsFolder && !listMultiSelection",
+          "group": "7_code2pdf@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "code2pdf.printSelection",
+          "when": "editorHasSelection",
+          "group": "7_code2pdf@1"
+        },
+        {
+          "command": "code2pdf.printFile",
+          "when": "!editorHasSelection",
+          "group": "7_code2pdf@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "code2pdf.printFile",
+          "group": "7_code2pdf@1"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "code2pdf.printChanges",
+          "when": "scmProvider == git",
+          "group": "7_code2pdf@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "code2pdf",
+      "properties": {
+        "code2pdf.outputFolder": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Folder to save PDFs in without asking, such as `~/Documents/printouts`. Leave empty to choose where to save each PDF. A relative path is relative to the workspace folder.",
+          "order": 1
+        },
+        "code2pdf.openWith": {
+          "type": "string",
+          "enum": [
+            "viewer",
+            "editor",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Open the PDF in your computer's PDF viewer",
+            "Open the PDF in a VS Code tab (needs a PDF viewer extension)",
+            "Don't open it; show where it was saved"
+          ],
+          "default": "viewer",
+          "description": "What to do with a PDF once it's made.",
+          "order": 2
+        },
+        "code2pdf.theme": {
+          "type": "string",
+          "default": "paper",
+          "markdownDescription": "Colour theme: `paper` (the default), `mono` (black and white, for printers), or the name of any Pygments style, such as `github-dark` or `solarized-light`. Run `code2pdf --list-themes` for the full list.",
+          "order": 3
+        },
+        "code2pdf.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Globs to add when printing a folder, for files the default selection leaves out: data files such as `*.json`, hidden folders such as `.github`, or skipped folders such as `vendor/mylib`. Passed to code2pdf as `--include`.",
+          "order": 4
+        },
+        "code2pdf.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Globs to leave out when printing a folder or changes, such as `tests`, `*_test.go` or `docs/**/*.md`. Without `/` a glob matches names at any depth; with `/` it matches the path from the folder. Passed to code2pdf as `--exclude`.",
+          "order": 5
+        },
+        "code2pdf.executable": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Path to the `code2pdf` command. Leave empty to find it on your `PATH` and in the usual install folders.",
+          "order": 6
+        },
+        "code2pdf.blacklisted_folders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDeprecationMessage": "Replaced by `#code2pdf.exclude#`. A value you set here is still used.",
+          "description": "Folders to skip, by name."
+        },
+        "code2pdf.blacklisted_folder_pattern": {
+          "type": "string",
+          "default": "",
+          "markdownDeprecationMessage": "Replaced by `#code2pdf.exclude#`. A value you set here is still used.",
+          "description": "A pattern for folders to skip."
+        },
+        "code2pdf.whitelisted_file_extensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDeprecationMessage": "No longer needed: code2pdf now includes common source code by default. A value you set here still limits printing to these extensions.",
+          "description": "The only file extensions to print."
+        },
+        "code2pdf.whitelisted_file_names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDeprecationMessage": "Replaced by `#code2pdf.include#`. A value you set here is still used.",
+          "description": "File names to include as well."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src",
+    "test:unit": "npm run compile && node --test \"out/test/unit/**/*.test.js\"",
+    "test:integration": "npm run compile && vscode-test",
+    "test": "npm run test:unit && npm run test:integration",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.90.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "eslint": "^10.12.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1"
+  }
+}

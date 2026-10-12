@@ -1,0 +1,57 @@
+# Lint, unit tests and integration tests (in a real VS Code) against the latest code2pdf release.
+# The weekly run catches a code2pdf release that breaks the extension.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, vscode: stable }
+          - { os: ubuntu-24.04, vscode: 1.90.0 }   # the oldest in package.json's engines
+          - { os: macos-latest, vscode: stable }
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }}, VS Code ${{ matrix.vscode }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install code2pdf (.deb)
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL -o /tmp/code2pdf_all.deb https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf_all.deb
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq /tmp/code2pdf_all.deb poppler-utils xvfb
+      - name: Install code2pdf (Homebrew)
+        if: runner.os == 'macOS'
+        run: brew install readbysearch/tap/code2pdf poppler
+      - run: code2pdf --version
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - name: Integration tests
+        env:
+          VSCODE_TEST_VERSION: ${{ matrix.vscode }}
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a ' || '' }}npx vscode-test
+      - name: Package
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        run: npx vsce package
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux' && matrix.vscode == 'stable'
+        with:
+          name: vsix
+          path: "*.vsix"
