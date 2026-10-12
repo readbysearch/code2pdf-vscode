@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
@@ -47,6 +48,11 @@ async function messages(body: () => Promise<unknown>): Promise<string[]> {
 describe("code2pdf", () => {
   before(async () => {
     await vscode.extensions.getExtension("readbysearch.code2pdf")?.activate();
+  });
+
+  beforeEach(() => {
+    assert.ok(vscode.workspace.getConfiguration("code2pdf").get<string>("outputFolder"),
+      "the fixture's outputFolder is set, so no test opens a real save dialog");
   });
 
   it("registers its commands, and version 1's", async () => {
@@ -168,6 +174,7 @@ describe("code2pdf", () => {
 
   it("says so when code2pdf isn't where the setting points", async () => {
     const config = vscode.workspace.getConfiguration("code2pdf");
+    const outputFolder = config.inspect<string>("outputFolder")?.workspaceValue;
     await config.update("executable", "/nonexistent/code2pdf", vscode.ConfigurationTarget.Global);
     await config.update("outputFolder", "", vscode.ConfigurationTarget.Workspace);
     try {
@@ -182,8 +189,36 @@ describe("code2pdf", () => {
       assert.ok(!asked, "doesn't ask where to save a PDF it can't make");
     } finally {
       await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
-      await config.update("outputFolder", undefined, vscode.ConfigurationTarget.Workspace);
+      await config.update("outputFolder", outputFolder, vscode.ConfigurationTarget.Workspace);
     }
+  });
+
+  it("keeps the elapsed time moving while code2pdf is quiet", async () => {
+    const fake = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "code2pdf-fake-")), "code2pdf");
+    fs.writeFileSync(fake, [
+      "#!/bin/sh",
+      'if [ "$1" = "--version" ]; then echo "code2pdf 3.12 (commit x, 2026-10-11)"; echo "  installed: Homebrew, /x"; exit 0; fi',
+      'out=""; prev=""; for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done',
+      'echo "Converting to a PDF file for src/util.py"',
+      'mkdir -p "$(dirname "$out")"',
+      "sleep 2.5",
+      "printf '%%PDF-1.7\\n' > \"$out\"",
+      'echo "PDF created at $out"',
+    ].join("\n"), { mode: 0o755 });
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    await config.update("executable", fake, vscode.ConfigurationTarget.Global);
+    const reports: string[] = [];
+    try {
+      const pdf = await stubbed("withProgress", (_options: unknown, task: (p: unknown, t: unknown) => Thenable<unknown>) =>
+        task({ report: (r: { message?: string }) => reports.push(r.message ?? "") },
+          { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) }),
+      () => vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")));
+      assert.ok(pdf && fs.existsSync(pdf));
+    } finally {
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+    }
+    assert.ok(reports.includes("src/util.py (0:00)"), reports.join(" | "));
+    assert.ok(reports.some((r) => /^src\/util\.py \(0:0[12]\)$/.test(r)), `ticks while quiet: ${reports.join(" | ")}`);
   });
 
   it("says what to do outside a git repository", async () => {

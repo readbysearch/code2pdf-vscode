@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { OutputReader, ProgressUpdate, parseProgress } from "../../progress";
+import { OutputReader, ProgressUpdate, clock, parseProgress, withElapsed } from "../../progress";
 
 // What code2pdf 3.12 wrote to stderr for `code2pdf -a scripts -o a.pdf --exclude nothing_here`
 const RUN = `Warning: --exclude 'nothing_here' matched nothing
@@ -93,4 +93,12 @@ test("big numbers have commas", () => {
   assert.equal(updates[0].message, "1,204 files, ~7,702 pages");
   assert.equal(reader.pages, 7689);
   assert.equal(parseProgress("code2pdf: 1 file, 11 lines (~2 pages)")?.message, "1 file, ~2 pages");
+});
+
+test("elapsed time in the message, so a quiet code2pdf doesn't look frozen", () => {
+  assert.equal(clock(0), "0:00");
+  assert.equal(clock(75.9), "1:15");
+  assert.equal(clock(3600), "60:00");
+  assert.equal(withElapsed("Laying out page 7 of ~62", 21.4), "Laying out page 7 of ~62 (0:21)");
+  assert.equal(withElapsed(undefined, 5), "0:05 elapsed");
 });

@@ -13,8 +13,9 @@ tool (3.12 or later) instead of Vim and Ghostscript.
   a commit. Changed lines are marked in the margin.
 - If code2pdf isn't installed, or is too old, the extension says so and offers to install or
   update it in a terminal.
-- A progress notification you can cancel, warnings and errors shown instead of failing
-  silently, and everything code2pdf printed in the **code2pdf** output panel.
+- A progress notification you can cancel, with the time so far always moving (even while
+  code2pdf is quiet on a long file), warnings and errors shown instead of failing silently,
+  and everything code2pdf printed in the **code2pdf** output panel.
 - Settings: where PDFs go, what opens them, the colour theme, and globs to include or exclude.
   Version 1's settings still work if you set them.
 - Works over Remote SSH and in WSL; on Windows itself it explains how to use WSL.

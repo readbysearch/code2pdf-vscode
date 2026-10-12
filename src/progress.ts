@@ -16,6 +16,17 @@ export interface ProgressUpdate {
   fraction?: number;
 }
 
+/** Minutes and seconds: 75 -> "1:15". */
+export function clock(seconds: number): string {
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+/** The progress message with the time so far: "Laying out page 7 of ~62 (0:21)". */
+export function withElapsed(message: string | undefined, seconds: number): string {
+  return message ? `${message} (${clock(seconds)})` : `${clock(seconds)} elapsed`;
+}
+
 const ELAPSED = /[,\s]+\d+:\d\d elapsed.*$/;
 
 /** What one line of code2pdf output says about progress, if anything. */

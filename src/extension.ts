@@ -6,7 +6,7 @@ import * as args from "./args";
 import * as cli from "./cli";
 import * as git from "./git";
 import { INSTALL_GUIDE, installCommand, parseOsRelease, updateCommand } from "./install";
-import type { OutputReader } from "./progress";
+import { type OutputReader, withElapsed } from "./progress";
 import * as specs from "./specs";
 
 let log: vscode.OutputChannel;
@@ -546,22 +546,35 @@ async function execute(job: Job): Promise<string | undefined> {
   const result = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: job.title, cancellable: true },
     async (progress, token) => {
+      // code2pdf can go quiet for a minute (laying out a long file, writing the PDF), so the
+      // elapsed time ticks every second and the notification never looks frozen
+      const started = Date.now();
       let done = 0;
-      return cli.run(command.command, {
-        cwd: job.cwd,
-        args: job.args,
-        input: job.input,
-        cancellation: token,
-        onOutput: (text) => log.append(text),
-        onProgress: (update) => {
-          const increment = update.fraction === undefined ? 0 : Math.max(0, update.fraction * 100 - done);
-          done += increment;
-          progress.report({ message: update.message, increment });
-        },
-      }).catch((error: NodeJS.ErrnoException) => {
+      let message: string | undefined;
+      const report = (increment = 0) =>
+        progress.report({ message: withElapsed(message, (Date.now() - started) / 1000), increment });
+      const ticker = setInterval(report, 1000);
+      try {
+        return await cli.run(command.command, {
+          cwd: job.cwd,
+          args: job.args,
+          input: job.input,
+          cancellation: token,
+          onOutput: (text) => log.append(text),
+          onProgress: (update) => {
+            const increment = update.fraction === undefined ? 0 : Math.max(0, update.fraction * 100 - done);
+            done += increment;
+            message = update.message ?? message;
+            report(increment);
+          },
+        });
+      } catch (error) {
         found = undefined;  // it was uninstalled or moved: look for it again next time
-        throw error.code === "ENOENT" ? new Stop(`code2pdf is no longer at ${command.command}. Print again to look for it.`, "error") : error;
-      });
+        const code = (error as NodeJS.ErrnoException).code;
+        throw code === "ENOENT" ? new Stop(`code2pdf is no longer at ${command.command}. Print again to look for it.`, "error") : error;
+      } finally {
+        clearInterval(ticker);
+      }
     });
   if (result.cancelled) {
     log.appendLine("Stopped.");

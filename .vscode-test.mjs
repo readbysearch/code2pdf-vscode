@@ -31,11 +31,16 @@ write("src/app.py", fs.readFileSync(path.join(project, "src/app.py"), "utf8").re
 git("commit", "-qam", "Change value 20");
 write("src/util.py", "def helper():\n    return 'util helper, edited but not committed'\n");
 
+// A fresh user-data folder each run, so user settings a test changes (or a killed run left
+// behind) can't reach the next run. Short path: macOS limits the socket path inside to 103 bytes.
+const userData = path.resolve(".vscode-test", "ud");
+fs.rmSync(userData, { recursive: true, force: true });
+
 export default defineConfig({
   files: process.env.CODE2PDF_TEST_FILES || "out/test/integration/**/*.test.js",
   version: process.env.VSCODE_TEST_VERSION || "stable",
   workspaceFolder: project,
-  launchArgs: ["--disable-extensions", "--disable-workspace-trust"],
+  launchArgs: ["--disable-extensions", "--disable-workspace-trust", "--user-data-dir", userData],
   env: { CODE2PDF_TEST_PDFS: pdfs },
   mocha: { ui: "bdd", timeout: 120000 },
 });
