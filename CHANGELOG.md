@@ -11,8 +11,9 @@ tool (3.12 or later) instead of Vim and Ghostscript.
   the lines you selected.
 - Print what changed in git: uncommitted changes, the last commit, a branch, or everything since
   a commit. Changed lines are marked in the margin.
-- If code2pdf isn't installed, or is too old, the extension says so and offers to install or
-  update it in a terminal.
+- Getting code2pdf: a Get Started page (opened on install) and an Install command. If code2pdf
+  is missing or too old when you print, the extension offers to install or update it in a
+  terminal, notices when that's done, and offers to print.
 - A progress notification you can cancel, with the time so far always moving (even while
   code2pdf is quiet on a long file), warnings and errors shown instead of failing silently,
   and everything code2pdf printed in the **code2pdf** output panel.

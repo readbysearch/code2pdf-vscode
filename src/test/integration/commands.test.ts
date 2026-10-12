@@ -35,7 +35,7 @@ async function stubbed<T>(name: string, stub: (...a: never[]) => unknown, body: 
 }
 
 /** Messages shown while BODY runs. */
-async function messages(body: () => Promise<unknown>): Promise<string[]> {
+async function messages(body: () => Thenable<unknown>): Promise<string[]> {
   const shown: string[] = [];
   const record = (m: string) => {
     shown.push(m);
@@ -219,6 +219,52 @@ describe("code2pdf", () => {
     }
     assert.ok(reports.includes("src/util.py (0:00)"), reports.join(" | "));
     assert.ok(reports.some((r) => /^src\/util\.py \(0:0[12]\)$/.test(r)), `ticks while quiet: ${reports.join(" | ")}`);
+  });
+
+  it("offers to install code2pdf when it's missing, then to print once it's installed", async () => {
+    // The extension's own cli module (same file, so the same module): it finds no code2pdf
+    // until the "install" is done
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cliModule = require("../../cli") as { find: (setting: string) => Promise<unknown>; NotInstalled: new (l: string[], f: boolean) => Error };
+    const realFind = cliModule.find;
+    let installed = false;
+    cliModule.find = (setting: string) => (installed ? realFind(setting) : Promise.reject(new cliModule.NotInstalled(["code2pdf"], false)));
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    await config.update("executable", "", vscode.ConfigurationTarget.Global);  // forget the code2pdf found earlier
+    const pdf = path.join(process.env.CODE2PDF_TEST_PDFS ?? "", "util.pdf");
+    fs.rmSync(pdf, { force: true });
+    const sent: string[] = [];
+    const warnings: string[] = [];
+    const infos: string[] = [];
+    try {
+      await stubbed("createTerminal", () => ({ show() {}, sendText: (t: string) => sent.push(t), dispose() {} }), () =>
+        stubbed("showWarningMessage", (m: string, ...buttons: string[]) => {
+          warnings.push(m);
+          return Promise.resolve(buttons[0]);  // the install button
+        }, () => stubbed("showInformationMessage", (m: string, ...buttons: string[]) => {
+          infos.push(m);
+          return Promise.resolve(buttons.includes("Print Now") ? "Print Now" : undefined);
+        }, async () => {
+          assert.equal(await vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")), undefined);
+          assert.match(warnings[0] ?? "", /code2pdf command-line tool, which isn't installed/);
+          assert.match(sent[0] ?? "", /^brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb|install\.sh \| bash -s -- --user$/);
+          assert.ok(!fs.existsSync(pdf));
+          installed = true;  // the terminal finished
+          for (let i = 0; i < 100 && !fs.existsSync(pdf); i++) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        })));
+    } finally {
+      cliModule.find = realFind;
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+    }
+    assert.ok(infos.some((m) => /^code2pdf \S+ is installed\.$/.test(m)), infos.join(" | "));
+    assert.ok(fs.existsSync(pdf), "Print Now printed the file that was asked for");
+  });
+
+  it("the install command says when code2pdf is already installed", async () => {
+    const shown = await messages(() => vscode.commands.executeCommand("code2pdf.install"));
+    assert.ok(shown.some((m) => /^code2pdf \S+ is installed \(/.test(m)), shown.join(" | "));
   });
 
   it("says what to do outside a git repository", async () => {

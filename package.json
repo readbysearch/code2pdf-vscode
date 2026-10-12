@@ -48,6 +48,9 @@
     }
   },
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onWalkthrough:start"
+  ],
   "contributes": {
     "commands": [
       {
@@ -78,6 +81,11 @@
       {
         "command": "code2pdf.printChanges",
         "title": "Print Changes to PDF…",
+        "category": "code2pdf"
+      },
+      {
+        "command": "code2pdf.install",
+        "title": "Install the Command-Line Tool",
         "category": "code2pdf"
       },
       {
@@ -235,7 +243,55 @@
           "description": "File names to include as well."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "start",
+        "title": "Print code with code2pdf",
+        "description": "Install the code2pdf tool, then print a folder, chosen files, some lines, or what changed in git.",
+        "steps": [
+          {
+            "id": "install",
+            "title": "Install the code2pdf tool",
+            "description": "This extension prints with the code2pdf command-line tool, on macOS and Linux (on Windows, in WSL). Install it once.\n[Install code2pdf](command:code2pdf.install)",
+            "media": {
+              "markdown": "media/install.md"
+            },
+            "completionEvents": [
+              "onContext:code2pdf.installed"
+            ]
+          },
+          {
+            "id": "print",
+            "title": "Print a folder, files or lines",
+            "description": "Right-click a folder or files in the Explorer and choose **Print to PDF**, or select lines and choose **Print Selection to PDF**. Each file keeps its path and its own line numbers.\n[Print the Workspace Folder](command:code2pdf.printWorkspace)",
+            "media": {
+              "image": "images/pages.png",
+              "altText": "A contents page, a page of changes with the changed lines marked, and a page of code"
+            },
+            "completionEvents": [
+              "onCommand:code2pdf.print",
+              "onCommand:code2pdf.printWorkspace",
+              "onCommand:code2pdf.printFile",
+              "onCommand:code2pdf.printSelection",
+              "onCommand:code2pdf.chooseFiles"
+            ]
+          },
+          {
+            "id": "changes",
+            "title": "Print what changed",
+            "description": "Print your uncommitted changes, the last commit, a branch, or everything since a commit. Each change comes with the code around it, and the changed lines are marked in the margin.\n[Print Changes](command:code2pdf.printChanges)",
+            "media": {
+              "image": "images/pages.png",
+              "altText": "Pages printed by code2pdf, with changed lines marked"
+            },
+            "completionEvents": [
+              "onCommand:code2pdf.printChanges"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

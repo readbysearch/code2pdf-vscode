@@ -17,6 +17,11 @@ README.md only.
 - `src/progress.ts`: reads code2pdf's stderr (`[2/3] … (50%)`, `Done: N pages`, `Warning:`,
   `Note:`, `Error:`); `-s` reports on stdout.
 - `src/install.ts`: install and update commands per platform and install kind.
+- Getting code2pdf: the `start` walkthrough opens on install (`onWalkthrough:start` activates
+  the extension; its first step completes on the `code2pdf.installed` context, which
+  `checkInstalled()` sets). An install started from a message or `code2pdf.install` runs in a
+  terminal; `watchForInstall()` then calls `cli.find` every 3 s and offers Print Now (the
+  last print command, `lastPrint`).
 
 ## Rules
 

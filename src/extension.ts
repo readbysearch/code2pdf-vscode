@@ -12,6 +12,10 @@ import * as specs from "./specs";
 let log: vscode.OutputChannel;
 let state: vscode.Memento;
 let found: cli.Code2pdf | undefined;
+/** The last print command run, to offer it again once code2pdf is installed. */
+let lastPrint: { id: string; args: unknown[] } | undefined;
+/** Checks every few seconds whether an install started from here has finished. */
+let installWatch: NodeJS.Timeout | undefined;
 
 /** A print, ready to run. */
 interface Job {
@@ -36,7 +40,10 @@ export function activate(context: vscode.ExtensionContext) {
   state = context.globalState;
   // Each returns the PDF's path, or undefined if nothing was printed
   const register = (id: string, handler: (...a: never[]) => Promise<string | undefined>) =>
-    context.subscriptions.push(vscode.commands.registerCommand(id, (...a: unknown[]) => guard(() => handler(...(a as never[])))));
+    context.subscriptions.push(vscode.commands.registerCommand(id, (...a: unknown[]) => {
+      lastPrint = { id, args: a };
+      return guard(() => handler(...(a as never[])));
+    }));
   register("code2pdf.print", printResources);
   register("code2pdf.chooseFiles", chooseFiles);
   register("code2pdf.printFile", printFile);
@@ -46,14 +53,19 @@ export function activate(context: vscode.ExtensionContext) {
   // Version 1's commands, for keybindings that use them
   register("extension.printFileToPdf", () => printFile());
   register("extension.printAll", () => printWorkspace());
+  context.subscriptions.push(vscode.commands.registerCommand("code2pdf.install", () => guard(installOrCheck)));
   context.subscriptions.push(
     log,
+    { dispose: stopInstallWatch },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("code2pdf.executable")) {
         found = undefined;
+        void checkInstalled();
       }
     }),
   );
+  // For the Get Started walkthrough: its first step is done once code2pdf is installed
+  void checkInstalled();
 }
 
 export function deactivate() {}
@@ -150,7 +162,46 @@ async function code2pdf(): Promise<cli.Code2pdf | undefined> {
   }
 }
 
-async function hasBrew(): Promise<boolean> {
+/** Sets the code2pdf.installed context (for the walkthrough), without any message. */
+async function checkInstalled(): Promise<boolean> {
+  let installed: boolean;
+  try {
+    found = await cli.find(settings().executable);
+    installed = true;
+  } catch {
+    installed = false;
+  }
+  await vscode.commands.executeCommand("setContext", "code2pdf.installed", installed);
+  return installed;
+}
+
+/** The install (or update) command for this machine, and what to say about it. */
+function howToInstall(old?: cli.Code2pdf): { install?: { label: string; command: string }; message: string } {
+  if (old) {
+    const update = updateCommand(old, os.homedir());
+    return {
+      install: update,
+      message: `This extension needs code2pdf ${cli.MIN_VERSION.join(".")} or later, and ${old.command} is ${old.version}.` +
+        (update ? ` It can be updated with: ${update.command}` : ""),
+    };
+  }
+  let release;
+  try {
+    release = parseOsRelease(fs.readFileSync("/etc/os-release", "utf8"));
+  } catch {
+    release = undefined;
+  }
+  const install = installCommand(process.platform, hasBrew(), release);
+  if (install) {
+    return { install, message: `This extension prints with the code2pdf command-line tool, which isn't installed. It installs with: ${install.command}` };
+  }
+  if (process.platform === "darwin") {
+    return { message: "This extension prints with the code2pdf command-line tool, which isn't installed. It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run \"code2pdf: Install the Command-Line Tool\"." };
+  }
+  return { message: "This extension prints with the code2pdf command-line tool, which isn't installed." };
+}
+
+function hasBrew(): boolean {
   for (const brew of ["/opt/homebrew/bin/brew", "/usr/local/bin/brew", "/home/linuxbrew/.linuxbrew/bin/brew"]) {
     if (fs.existsSync(brew)) {
       return true;
@@ -169,35 +220,47 @@ async function offerInstall(error: cli.NotInstalled): Promise<void> {
     }
     return;
   }
-  let release;
-  try {
-    release = parseOsRelease(fs.readFileSync("/etc/os-release", "utf8"));
-  } catch {
-    release = undefined;
-  }
-  const install = installCommand(process.platform, await hasBrew(), release);
-  const message = "This extension prints with the code2pdf command-line tool, which isn't installed." +
-    (install ? ` It can be installed with: ${install.command}` : process.platform === "darwin" ? " It installs with Homebrew (brew.sh)." : "");
-  const buttons = [...(install ? [install.label] : []), "Installation Guide"];
+  await offer(howToInstall());
+}
+
+async function offerUpdate(old: cli.Code2pdf): Promise<void> {
+  await offer(howToInstall(old));
+}
+
+async function offer({ install, message }: ReturnType<typeof howToInstall>): Promise<void> {
+  const homebrew = !install && process.platform === "darwin";
+  const buttons = [...(install ? [install.label] : homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
   const choice = await vscode.window.showWarningMessage(message, ...buttons);
   if (install && choice === install.label) {
-    runInTerminal("Install code2pdf", install.command);
+    runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command);
+  } else if (choice === "Open brew.sh") {
+    void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));
   } else if (choice === "Installation Guide") {
     void vscode.env.openExternal(vscode.Uri.parse(INSTALL_GUIDE));
   }
 }
 
-async function offerUpdate(old: cli.Code2pdf): Promise<void> {
-  const update = updateCommand(old, os.homedir());
-  const message = `This extension needs code2pdf ${cli.MIN_VERSION.join(".")} or later, and ${old.command} is ${old.version}.` +
-    (update ? ` It can be updated with: ${update.command}` : "");
-  const buttons = [...(update ? [update.label] : []), "Installation Guide"];
-  const choice = await vscode.window.showWarningMessage(message, ...buttons);
-  if (update && choice === update.label) {
-    runInTerminal("Update code2pdf", update.command);
-  } else if (choice === "Installation Guide") {
-    void vscode.env.openExternal(vscode.Uri.parse(INSTALL_GUIDE));
+/** The Install command (and the walkthrough's button): install, update, or say it's ready. */
+async function installOrCheck(): Promise<undefined> {
+  if (process.platform === "win32") {
+    await code2pdf();  // explains WSL
+    return undefined;
   }
+  try {
+    const ready = await cli.find(settings().executable);
+    found = ready;
+    await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
+    void show("info", `code2pdf ${ready.version} is installed (${ready.installKind}). Right-click a folder or file and choose Print to PDF.`);
+  } catch (error) {
+    if (error instanceof cli.NotInstalled) {
+      await offerInstall(error);
+    } else if (error instanceof cli.TooOld) {
+      await offerUpdate(error.found);
+    } else {
+      throw error;
+    }
+  }
+  return undefined;
 }
 
 function runInTerminal(name: string, command: string): void {
@@ -205,7 +268,50 @@ function runInTerminal(name: string, command: string): void {
   terminal.show();
   terminal.sendText(command);
   found = undefined;
-  void vscode.window.showInformationMessage(`${name} is running in the terminal. When it's done, print again.`);
+  watchForInstall();
+  void vscode.window.showInformationMessage(`${name} is running in the terminal. You'll get a message here when it's ready.`);
+}
+
+function stopInstallWatch(): void {
+  clearInterval(installWatch);
+  installWatch = undefined;
+}
+
+/** Checks every few seconds (for half an hour) whether code2pdf is ready, then offers to print. */
+function watchForInstall(intervalMs = 3000): void {
+  stopInstallWatch();
+  const started = Date.now();
+  let checking = false;
+  installWatch = setInterval(async () => {
+    if (checking) {
+      return;
+    }
+    if (Date.now() - started > 30 * 60_000) {
+      stopInstallWatch();
+      return;
+    }
+    checking = true;
+    try {
+      const ready = await cli.find(settings().executable);
+      if (!installWatch) {
+        return;
+      }
+      stopInstallWatch();
+      found = ready;
+      log.appendLine(`code2pdf is ready: ${ready.command}, ${ready.version} (${ready.installKind})`);
+      await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
+      const retry = lastPrint;
+      const choice = await show("info", `code2pdf ${ready.version} is installed.` + (retry ? "" : " Right-click a folder or file and choose Print to PDF."),
+        ...(retry ? ["Print Now"] : []));
+      if (choice === "Print Now" && retry) {
+        void vscode.commands.executeCommand(retry.id, ...retry.args);
+      }
+    } catch {
+      // Not there yet (or still too old): look again
+    } finally {
+      checking = false;
+    }
+  }, intervalMs);
 }
 
 // Where things are
