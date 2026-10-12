@@ -7,8 +7,8 @@
   "license": "AGPL-3.0-only",
   "icon": "images/icon.png",
   "galleryBanner": {
-    "color": "#1c2541",
-    "theme": "dark"
+    "color": "#eaf7f2",
+    "theme": "light"
   },
   "homepage": "https://github.com/readbysearch/code2pdf-vscode#readme",
   "repository": {
