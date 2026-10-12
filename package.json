@@ -4,7 +4,7 @@
   "description": "Print source code as a PDF made for reading: a contents page, syntax highlighting, real line numbers and a bookmark per file. Print a folder, chosen files, a selection, or what changed in git with the changed lines marked.",
   "version": "2.0.0",
   "publisher": "readbysearch",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#eaf7f2",

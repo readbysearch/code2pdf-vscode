@@ -168,4 +168,7 @@ different:
 
 ## License
 
-AGPL-3.0-only, like code2pdf.
+The extension is under the [MIT License](LICENSE). The code2pdf command-line tool it runs is
+separate, under the AGPL-3.0 (see [its license](https://github.com/readbysearch/code2pdf#license)).
+
+The code2pdf name and logo are not covered by either licence: a fork needs its own name and icon.

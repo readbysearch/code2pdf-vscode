@@ -23,6 +23,7 @@ tool (3.12 or later) instead of Vim and Ghostscript.
 - Settings: where PDFs go, what opens them, the colour theme, and globs to include or exclude.
   Version 1's settings still work if you set them.
 - Works over Remote SSH and in WSL; on Windows itself it explains how to use WSL.
+- MIT licensed (version 1 had no licence). code2pdf itself stays AGPL-3.0.
 - For version 1 users: the install message says code2pdf replaces Vim and Ghostscript, and after
   the first print a note says what changed (where PDFs go, which files are printed). "Print All
   Src File to A Single PDF" is now "Print All Source Files to PDF"; the old command IDs still work.
