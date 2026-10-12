@@ -11,7 +11,7 @@ const INSTALL_SH = "https://raw.githubusercontent.com/readbysearch/code2pdf/main
 export interface InstallCommand {
   /** Button label, such as "Install with Homebrew". */
   label: string;
-  /** How, in words: "with Homebrew (brew install readbysearch/tap/code2pdf)". */
+  /** How, in a few words: "with Homebrew (brew install readbysearch/tap/code2pdf)", "just for you (no sudo)". */
   how: string;
   /** Run in a terminal, where the user sees it and can answer prompts (sudo, for one). */
   command: string;
@@ -55,33 +55,38 @@ const brew = (verb: "install" | "upgrade"): InstallCommand => ({
 });
 
 const deb = (verb: "Install" | "Update"): InstallCommand => ({
-  label: `${verb} the .deb`,
-  how: "from code2pdf's .deb package, with apt (it asks for your password)",
+  label: `${verb} with apt (sudo)`,
+  how: "for all users with apt (sudo)",
   command: `bash -c '${fetch(DEB_URL, "/tmp/code2pdf_all.deb")} && sudo apt install /tmp/code2pdf_all.deb'`,
   asks: "apt asks for your password, then to confirm: answer in the terminal.",
 });
 
 const installScript = (verb: "Install" | "Update", where: "--user" | "--system"): InstallCommand => ({
-  label: where === "--user" ? `${verb} (no sudo)` : verb,
-  how: where === "--user" ? "with code2pdf's install.sh, into ~/.local (no sudo)" : "with code2pdf's install.sh, for all users",
+  label: where === "--user" ? `${verb} for Me (no sudo)` : `${verb} for All Users (sudo)`,
+  how: where === "--user" ? "just for you (no sudo)" : "for all users (sudo)",
   command: `bash -c '${fetch(INSTALL_SH, "-")} | bash -s -- ${where}'`,
+  asks: where === "--system" ? "It asks for your password: answer in the terminal." : undefined,
 });
 
-/** How to install code2pdf here, or undefined when only the guide can help. */
-export function installCommand(platform: NodeJS.Platform, hasBrew: boolean, release?: OsRelease): InstallCommand | undefined {
+/**
+ * The ways to install code2pdf here, best first; empty when only the guide can help. On Linux
+ * without Homebrew there are two: for all users (sudo), or just for you (no sudo; also where
+ * you can't use sudo, such as a shared server).
+ */
+export function installCommands(platform: NodeJS.Platform, hasBrew: boolean, release?: OsRelease): InstallCommand[] {
   if (platform === "darwin") {
-    return hasBrew ? brew("install") : undefined;
+    return hasBrew ? [brew("install")] : [];
   }
   if (platform !== "linux") {
-    return undefined;
+    return [];
   }
   if (hasBrew) {
-    return brew("install");
+    return [brew("install")];
   }
   if (release && debWorks(release)) {
-    return deb("Install");
+    return [deb("Install"), installScript("Install", "--user")];
   }
-  return installScript("Install", "--user");
+  return [installScript("Install", "--user"), installScript("Install", "--system")];
 }
 
 /** How to update the code2pdf that was FOUND, the same way it was installed. */

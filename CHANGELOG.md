@@ -14,7 +14,9 @@ tool (3.12 or later) instead of Vim and Ghostscript.
 - Getting code2pdf: a Get Started page (opened on install) and an Install command. If code2pdf
   is missing or too old when you print, the extension offers to install or update it in a
   terminal, notices when that's done, and offers to print. The install works on a fresh Ubuntu
-  desktop (wget, no curl) and in any shell; CI tries it on fresh macOS, Ubuntu 24.04 and 22.04.
+  desktop (wget, no curl) and in any shell. On Linux it offers an install for all users (sudo)
+  and one just for you (no sudo, for machines where you can't use sudo). CI tries each way on
+  fresh machines: macOS, Ubuntu 24.04 and 22.04.
 - A progress notification you can cancel, with the time so far always moving (even while
   code2pdf is quiet on a long file), warnings and errors shown instead of failing silently,
   and everything code2pdf printed in the **code2pdf** output panel.

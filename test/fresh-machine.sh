@@ -4,6 +4,7 @@
 # the extension offers the install, the command runs in VS Code's terminal, Print Now prints.
 # Run as root in a container, from the repository:
 #   docker run --rm -v "$PWD:/src:ro" ubuntu:24.04 bash /src/test/fresh-machine.sh
+# CODE2PDF_TEST_CLICK="Install for Me" (docker run -e …) picks the install button; default: the first.
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 export DEBIAN_FRONTEND=noninteractive
@@ -29,7 +30,7 @@ tar -C "$SRC" --exclude=./node_modules --exclude=./out --exclude=./.vscode-test 
 chown -R tester:tester /home/tester/ext
 echo "== $(. /etc/os-release; echo "$PRETTY_NAME"), $(uname -m)"
 for c in code2pdf curl git wget python3; do printf "  %-8s %s\n" "$c" "$(command -v "$c" || echo missing)"; done
-su - tester -c 'set -o pipefail; cd ~/ext && npm ci --no-audit --no-fund --loglevel=error >/dev/null && npx tsc -p . &&
+su - tester -c 'set -o pipefail; export CODE2PDF_TEST_CLICK="'"${CODE2PDF_TEST_CLICK:-}"'"; cd ~/ext && npm ci --no-audit --no-fund --loglevel=error >/dev/null && npx tsc -p . &&
   CODE2PDF_TEST_FILES="out/test/fresh/*.test.js" CODE2PDF_TEST_NO_SANDBOX=1 xvfb-run -a npx vscode-test 2>&1 |
   grep -E "^\[(warning|info|terminal)\]|^…|Clicked|PDF after|passing|failing|Error|^\s+[0-9]+\) |✔|✗"'
 echo "== code2pdf now: $(su - tester -c 'command -v code2pdf || ls ~/.local/bin/code2pdf' 2>/dev/null || echo missing)"

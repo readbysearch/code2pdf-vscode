@@ -90,7 +90,9 @@ describe("first print without code2pdf (fresh machine)", () => {
     window.showWarningMessage = (message: string, ...buttons: string[]) => {
       warnings.push({ message, buttons });
       console.log(`[warning] ${message} [${buttons.join(" | ")}]`);
-      return Promise.resolve(buttons[0]);  // click the install button
+      // Click the install button: CODE2PDF_TEST_CLICK picks one by name, else the first
+      const want = process.env.CODE2PDF_TEST_CLICK;
+      return Promise.resolve(want ? buttons.find((b) => b.startsWith(want)) : buttons[0]);
     };
     window.showInformationMessage = (message: string, ...buttons: string[]) => {
       infos.push(message);
@@ -102,7 +104,9 @@ describe("first print without code2pdf (fresh machine)", () => {
       const first = await vscode.commands.executeCommand<string>("code2pdf.printFile", vscode.Uri.file(path.join(project, "src/util.py")));
       assert.equal(first, undefined, "nothing printed before code2pdf is installed");
       assert.match(warnings[0]?.message ?? "", /isn't installed/);
-      console.log(`Clicked "${warnings[0].buttons[0]}"; waiting for the terminal to install code2pdf…`);
+      const want = process.env.CODE2PDF_TEST_CLICK;
+      assert.ok(!want || warnings[0].buttons.some((b) => b.startsWith(want)), `no "${want}" button: ${warnings[0].buttons.join(", ")}`);
+      console.log(`Clicked "${want ? warnings[0].buttons.find((b) => b.startsWith(want)) : warnings[0].buttons[0]}"; waiting for the terminal to install code2pdf…`);
       const started = Date.now();
       let lastReport = started;
       // A good install takes 1-3 minutes (Homebrew on a CI runner: ~2)

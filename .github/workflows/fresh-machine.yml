@@ -20,8 +20,10 @@ jobs:
       matrix:
         include:
           - { name: "macOS, Homebrew", os: macos-latest }
-          - { name: "Ubuntu 24.04, .deb", os: ubuntu-latest, image: "ubuntu:24.04" }
-          - { name: "Ubuntu 22.04, install.sh", os: ubuntu-latest, image: "ubuntu:22.04" }
+          - { name: "Ubuntu 24.04, apt (sudo)", os: ubuntu-latest, image: "ubuntu:24.04", click: "Install with apt" }
+          - { name: "Ubuntu 24.04, for me (no sudo)", os: ubuntu-latest, image: "ubuntu:24.04", click: "Install for Me" }
+          - { name: "Ubuntu 22.04, for me (no sudo)", os: ubuntu-latest, image: "ubuntu:22.04", click: "Install for Me" }
+          - { name: "Ubuntu 22.04, all users (sudo)", os: ubuntu-latest, image: "ubuntu:22.04", click: "Install for All Users" }
     runs-on: ${{ matrix.os }}
     name: Fresh machine, ${{ matrix.name }}
     timeout-minutes: 25
@@ -29,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fresh Ubuntu container (wget, python3; no curl, git or code2pdf)
         if: matrix.image
-        run: docker run --rm -v "$PWD:/src:ro" ${{ matrix.image }} bash /src/test/fresh-machine.sh
+        run: docker run --rm -e CODE2PDF_TEST_CLICK="${{ matrix.click }}" -v "$PWD:/src:ro" ${{ matrix.image }} bash /src/test/fresh-machine.sh
       - uses: actions/setup-node@v4
         if: runner.os == 'macOS'
         with:

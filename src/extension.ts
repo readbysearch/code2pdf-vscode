@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import * as args from "./args";
 import * as cli from "./cli";
 import * as git from "./git";
-import { INSTALL_GUIDE, type InstallCommand, installCommand, parseOsRelease, updateCommand } from "./install";
+import { INSTALL_GUIDE, type InstallCommand, installCommands, parseOsRelease, updateCommand } from "./install";
 import { type OutputReader, withElapsed } from "./progress";
 import * as specs from "./specs";
 import * as upgrade from "./upgrade";
@@ -216,11 +216,11 @@ async function checkInstalled(): Promise<boolean> {
 }
 
 /** The install (or update) command for this machine, and what to say about it. */
-function howToInstall(old?: cli.Code2pdf): { install?: InstallCommand; message: string } {
+function howToInstall(old?: cli.Code2pdf): { installs: InstallCommand[]; message: string } {
   if (old) {
     const update = updateCommand(old, os.homedir());
     return {
-      install: update,
+      installs: update ? [update] : [],
       message: `This extension needs code2pdf ${cli.MIN_VERSION.join(".")} or later, and ${old.command} is ${old.version}.` +
         (update ? ` It updates ${update.how}, in a terminal.` : ""),
     };
@@ -231,15 +231,15 @@ function howToInstall(old?: cli.Code2pdf): { install?: InstallCommand; message: 
   } catch {
     release = undefined;
   }
-  const install = installCommand(process.platform, hasBrew(), release);
+  const installs = installCommands(process.platform, hasBrew(), release);
   const intro = fromVersion1 ? upgrade.INSTALL_INTRO : "This extension prints with the code2pdf command-line tool, which isn't installed.";
-  if (install) {
-    return { install, message: `${intro} It installs ${install.how}, in a terminal.` };
+  if (installs.length) {
+    return { installs, message: `${intro} It installs ${installs.map((i) => i.how).join(" or ")}, in a terminal.` };
   }
   if (process.platform === "darwin") {
-    return { message: `${intro} It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run "code2pdf: Install the Command-Line Tool".` };
+    return { installs, message: `${intro} It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run "code2pdf: Install the Command-Line Tool".` };
   }
-  return { message: intro };
+  return { installs, message: intro };
 }
 
 function hasBrew(): boolean {
@@ -268,11 +268,12 @@ async function offerUpdate(old: cli.Code2pdf): Promise<void> {
   await offer(howToInstall(old));
 }
 
-async function offer({ install, message }: ReturnType<typeof howToInstall>): Promise<void> {
-  const homebrew = !install && process.platform === "darwin";
-  const buttons = [...(install ? [install.label] : homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
+async function offer({ installs, message }: ReturnType<typeof howToInstall>): Promise<void> {
+  const homebrew = !installs.length && process.platform === "darwin";
+  const buttons = [...installs.map((i) => i.label), ...(homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
   const choice = await vscode.window.showWarningMessage(message, ...buttons);
-  if (install && choice === install.label) {
+  const install = installs.find((i) => i.label === choice);
+  if (install) {
     runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command, install.asks);
   } else if (choice === "Open brew.sh") {
     void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));

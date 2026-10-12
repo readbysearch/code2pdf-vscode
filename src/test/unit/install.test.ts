@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { debWorks, installCommand, parseOsRelease, updateCommand } from "../../install";
+import { debWorks, installCommands, parseOsRelease, updateCommand } from "../../install";
+
+const installCommand = (...a: Parameters<typeof installCommands>) => installCommands(...a)[0];
 
 const UBUNTU_24 = `PRETTY_NAME="Ubuntu 24.04.1 LTS"
 NAME="Ubuntu"
@@ -26,6 +28,12 @@ test("install: Homebrew where there is one, else the .deb, else install.sh witho
   assert.match(installCommand("linux", false, { id: "ubuntu", versionId: "22.04" })?.command ?? "", /\| bash -s -- --user'$/);
   assert.match(installCommand("linux", false)?.command ?? "", /--user'$/);
   assert.equal(installCommand("win32", false), undefined);
+  const labels = (...a: Parameters<typeof installCommands>) => installCommands(...a).map((i) => i.label);
+  assert.deepEqual(labels("linux", false, parseOsRelease(UBUNTU_24)), ["Install with apt (sudo)", "Install for Me (no sudo)"],
+    "where you can't use sudo (a shared server), the no-sudo install is offered too");
+  assert.deepEqual(labels("linux", false, { id: "fedora", versionId: "41" }), ["Install for Me (no sudo)", "Install for All Users (sudo)"]);
+  assert.match(installCommands("linux", false)[1].command, /bash -s -- --system'$/);
+  assert.deepEqual(labels("darwin", true), ["Install with Homebrew"]);
   assert.match(installCommand("darwin", true)?.asks ?? "", /type y in the terminal/, "Homebrew 7 asks before installing");
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.asks ?? "", /password/);
 });

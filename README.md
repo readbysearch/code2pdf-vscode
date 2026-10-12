@@ -12,21 +12,48 @@ on macOS and Linux. Your code stays on your machine.
 
 ## Install code2pdf first
 
-The extension needs code2pdf 3.12 or later. When you install the extension, its **Get Started**
-page opens with the install as step 1, and **code2pdf: Install the Command-Line Tool** in the
-Command Palette does the same. If you print before installing it, the extension offers to install
-it then. Either way the install runs in a terminal, where you can see the command and answer its
-questions (Homebrew asks you to confirm, apt asks for your password), and VS Code tells you when
-it's ready (with **Print Now**, if you were printing):
+The extension prints with the code2pdf command-line tool, version 3.12 or later, on macOS and
+Linux. There are two ways to install it.
 
-| System | Command |
-| --- | --- |
-| macOS, or Linux with Homebrew | `brew install readbysearch/tap/code2pdf` |
-| Ubuntu 24.04+, Debian 13+ | `wget https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf_all.deb && sudo apt install ./code2pdf_all.deb` |
-| Other Linux, no sudo | `wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh \| bash -s -- --user` |
+**From VS Code.** Click Install on the extension's Get Started page, which opens when you install
+the extension, or run **code2pdf: Install the Command-Line Tool** from the Command Palette. If you
+print before installing it, the extension offers the same button. It picks the installer for your
+machine and runs it in a terminal, where you see what it does and answer its questions: Homebrew
+asks you to confirm, apt asks for your password. When code2pdf is ready, VS Code says so, with
+**Print Now** if you were printing.
 
-`curl -LO` and `curl -sSL` work in place of `wget` and `wget -qO-`. The extension's install
-button uses whichever of the two the machine has (a fresh Ubuntu desktop has only `wget`).
+**By hand,** in a terminal. On macOS, Homebrew needs no sudo. On Linux, install code2pdf for
+everyone on the machine, which needs sudo, or just for yourself, which doesn't (also the way to go
+where you can't use sudo, such as a shared server).
+
+- macOS, or Linux with Homebrew:
+
+  ```bash
+  brew install readbysearch/tap/code2pdf
+  ```
+
+- Linux, for all users (sudo):
+  - Ubuntu 24.04 or later, or Debian 13 or later: download the .deb, then install it with apt.
+
+    ```bash
+    wget https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf_all.deb
+    sudo apt install ./code2pdf_all.deb
+    ```
+
+  - Other Linux: install into `/usr/local`. The script asks for your password.
+
+    ```bash
+    wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --system
+    ```
+
+- Linux, just for you (no sudo), on any Linux: install into `~/.local`.
+
+  ```bash
+  wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --user
+  ```
+
+If you have curl rather than wget, use `curl -LO URL` to download a file and `curl -sSL URL` to
+print it. A fresh Ubuntu desktop has only wget.
 
 On Windows, use [WSL](https://code.visualstudio.com/docs/remote/wsl): open your folder in WSL,
 install code2pdf there, and print from that window. Over Remote SSH, code2pdf runs on the remote
