@@ -658,7 +658,7 @@ async function pickChanges(folder: string): Promise<{ rev: string; name: string 
   ];
   const picked = await vscode.window.showQuickPick(items, {
     title: "Print which changes?",
-    placeHolder: "Changed lines are marked in the margin. A commit below means it and everything after it.",
+    placeHolder: "Changed lines are marked in the margin",
     matchOnDescription: true,
   });
   if (!picked) {

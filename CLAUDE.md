@@ -76,3 +76,8 @@ pickers and messages. CI (`.github/workflows/ci.yml`) runs on Ubuntu (the .deb; 
    (Marketplace: Manage scope, all accessible organizations; PATs expire).
 5. Images in README.md are relative; vsce turns them into github.com/…/raw/HEAD/ links, so they
    must be pushed before the listing shows them. `images/src/render.sh` draws the icon.
+6. The README's demo GIFs: `npx vsce package && demos/record.sh` (Docker, ~4 minutes) records them
+   in a real VS Code on a virtual screen, driven by `demos/record.py` (xdotool clicks at fixed
+   positions on a 1280x800 screen; when VS Code's layout moves, take screenshots with shot() and
+   adjust). `demos/make-project.sh` makes the demo project and its git history. Re-record when
+   the UI changes.

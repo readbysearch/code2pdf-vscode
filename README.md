@@ -62,33 +62,51 @@ machine.
 ## Printing
 
 Right-click in the Explorer, an editor, an editor tab or the Source Control menu, or run the
-commands from the Command Palette (they start with "code2pdf").
+commands from the Command Palette (they start with "code2pdf"). In the clips below, the PDF opens
+in a VS Code tab (`code2pdf.openWith` set to `editor`, with a PDF viewer extension); by default it
+opens in your PDF viewer.
 
-- **A folder**: right-click it and choose **Print to PDF**. code2pdf picks the source files: it
-  leaves out hidden folders, build output, vendored dependencies, binary files and data files such
-  as JSON. The `include` and `exclude` settings change that.
-- **Chosen files**: right-click a folder and choose **Choose Files and Print to PDF…**. Every file
-  code2pdf would print is listed and checked; uncheck the ones to leave out.
-- **Several files or folders**: select them in the Explorer, then **Print to PDF**. They print as
-  one PDF, sorted by path, each folder with code2pdf's usual selection.
-- **A file**: right-click it, its tab or its editor, and choose **Print File to PDF**.
-- **Some lines**: select them and choose **Print Selection to PDF**. They print with their real
-  line numbers, and several selections print together.
-- **Changes**: choose **Print Changes to PDF…** from the Source Control menu or the Command
-  Palette, then what to print:
-  - your uncommitted changes;
-  - the last commit;
-  - this branch since it left `main`;
-  - a recent commit and everything after it;
-  - or the changes since a commit, tag or branch you name.
+### A folder
 
-  Each change prints with the code around it, such as the whole function it's in, and the
-  changed lines are marked with a bar in the margin. Files that git doesn't track yet are left
-  out, with a note.
+Right-click it and choose **Print to PDF**. code2pdf picks the source files: it leaves out hidden
+folders, build output, vendored dependencies, binary files and data files such as JSON. The
+`include` and `exclude` settings change that.
+
+![Right-clicking the src folder and choosing Print to PDF: the PDF opens on its contents page, then scrolls to api.py with its path and line numbers](images/demo-folder.gif)
+
+### Chosen files
+
+Right-click a folder and choose **Choose Files and Print to PDF…**. Every file code2pdf would
+print is listed and checked; uncheck the ones to leave out.
+
+![Choosing Choose Files and Print to PDF on the project, unchecking pyproject.toml and the test file, and printing the other five](images/demo-choose.gif)
+
+### Some lines
+
+Select them and choose **Print Selection to PDF**. They print with their real line numbers, and
+several selections print together.
+
+![Selecting lines 11 to 17 of api.py and choosing Print Selection to PDF: the PDF shows those lines numbered 11 to 17](images/demo-selection.gif)
+
+### What changed
+
+Choose **Print Changes to PDF…** from the Source Control menu or the Command Palette, then what to
+print: your uncommitted changes, the last commit, this branch since it left `main`, a recent commit
+and everything after it, or the changes since a commit, tag or branch you name. Each change prints
+with the code around it, such as the whole function it's in, and the changed lines are marked with
+a bar in the margin. Files that git doesn't track yet are left out, with a note.
+
+![Choosing Print Changes to PDF from the Source Control menu, then The last commit: the PDF marks the changed lines in the margin](images/demo-changes.gif)
+
+### Several files, or one file
+
+Select several files and folders in the Explorer, then **Print to PDF**: they print as one PDF,
+sorted by path, each folder with code2pdf's usual selection. For one file, right-click it, its tab
+or its editor and choose **Print File to PDF**.
 
 A progress notification shows the page count as code2pdf works. Cancel it to stop. When it's
-done, the PDF opens in your PDF viewer, and any warnings from code2pdf are shown. Everything
-code2pdf printed is in the **code2pdf** output panel.
+done, the PDF opens, and any warnings from code2pdf are shown. Everything code2pdf printed is in
+the **code2pdf** output panel.
 
 ## Settings
 
