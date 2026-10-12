@@ -301,6 +301,42 @@ describe("code2pdf", () => {
     assert.match(commands.find((c) => c.command === "code2pdf.printWorkspace")?.title ?? "", /^Print All /);
   });
 
+  it("a lookup that finishes late doesn't bring back the old code2pdf", async () => {
+    // Changing code2pdf.executable twice starts two lookups; the first (here made slow) ends last
+    const fake = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "code2pdf-fake-")), "code2pdf");
+    fs.writeFileSync(fake, [
+      "#!/bin/sh",
+      'if [ "$1" = "--version" ]; then echo "code2pdf 3.12 (commit x, 2026-10-11)"; echo "  installed: Homebrew, /x"; exit 0; fi',
+      'out=""; prev=""; for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done',
+      'echo "Converting to a PDF file for FAKE-CODE2PDF"',
+      'mkdir -p "$(dirname "$out")"; printf "%%PDF-1.7\\n" > "$out"',
+    ].join("\n"), { mode: 0o755 });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cliModule = require("../../cli") as { find: (setting: string) => Promise<unknown> };
+    const realFind = cliModule.find;
+    cliModule.find = async (setting: string) => {
+      if (!setting) {
+        await new Promise((r) => setTimeout(r, 1500));  // the lookup for the old setting is slow
+      }
+      return realFind(setting);
+    };
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    const reports: string[] = [];
+    try {
+      await config.update("executable", "", vscode.ConfigurationTarget.Global);
+      await config.update("executable", fake, vscode.ConfigurationTarget.Global);
+      await new Promise((r) => setTimeout(r, 2500));  // both lookups are done, the old one last
+      await stubbed("withProgress", (_options: unknown, task: (p: unknown, t: unknown) => Thenable<unknown>) =>
+        task({ report: (r: { message?: string }) => reports.push(r.message ?? "") },
+          { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) }),
+      () => vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")));
+    } finally {
+      cliModule.find = realFind;
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+    }
+    assert.ok(reports.some((r) => r.startsWith("FAKE-CODE2PDF")), `printed with the code2pdf the setting names now: ${reports.join(" | ")}`);
+  });
+
   it("says what to do outside a git repository", async () => {
     const shown = await messages(async () => {
       assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printChanges", { folder: path.dirname(project()) }), undefined);

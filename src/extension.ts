@@ -13,6 +13,8 @@ import * as upgrade from "./upgrade";
 let log: vscode.OutputChannel;
 let state: vscode.Memento;
 let found: cli.Code2pdf | undefined;
+/** Bumped when code2pdf.executable changes, so a lookup that started earlier can't set `found`. */
+let generation = 0;
 /** The last print command run, to offer it again once code2pdf is installed. */
 let lastPrint: { id: string; args: unknown[] } | undefined;
 /** Checks every few seconds whether an install started from here has finished. */
@@ -70,6 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: stopInstallWatch },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("code2pdf.executable")) {
+        generation++;
         found = undefined;
         void checkInstalled();
       }
@@ -184,11 +187,10 @@ async function code2pdf(): Promise<cli.Code2pdf | undefined> {
     }
     return undefined;
   }
-  const executable = settings().executable;
   try {
-    found = await cli.find(executable);
-    log.appendLine(`Using ${found.command}: code2pdf ${found.version} (${found.installKind})`);
-    return found;
+    const result = await lookUp();
+    log.appendLine(`Using ${result.command}: code2pdf ${result.version} (${result.installKind})`);
+    return result;
   } catch (error) {
     if (error instanceof cli.NotInstalled) {
       await offerInstall(error);
@@ -202,11 +204,24 @@ async function code2pdf(): Promise<cli.Code2pdf | undefined> {
   }
 }
 
+/**
+ * Finds code2pdf for the current setting and remembers it, unless the setting changed while it
+ * looked: an older, slower lookup finishing last mustn't bring back the old code2pdf.
+ */
+async function lookUp(): Promise<cli.Code2pdf> {
+  const started = generation;
+  const result = await cli.find(settings().executable);
+  if (started === generation) {
+    found = result;
+  }
+  return result;
+}
+
 /** Sets the code2pdf.installed context (for the walkthrough), without any message. */
 async function checkInstalled(): Promise<boolean> {
   let installed: boolean;
   try {
-    found = await cli.find(settings().executable);
+    await lookUp();
     installed = true;
   } catch {
     installed = false;
@@ -289,8 +304,7 @@ async function installOrCheck(): Promise<undefined> {
     return undefined;
   }
   try {
-    const ready = await cli.find(settings().executable);
-    found = ready;
+    const ready = await lookUp();
     await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
     void show("info", `code2pdf ${ready.version} is installed (${ready.installKind}). Right-click a folder or file and choose Print to PDF.`);
   } catch (error) {
@@ -334,12 +348,11 @@ function watchForInstall(intervalMs = 3000): void {
     }
     checking = true;
     try {
-      const ready = await cli.find(settings().executable);
+      const ready = await lookUp();
       if (!installWatch) {
         return;
       }
       stopInstallWatch();
-      found = ready;
       log.appendLine(`code2pdf is ready: ${ready.command}, ${ready.version} (${ready.installKind})`);
       await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
       const retry = lastPrint;
