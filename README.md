@@ -21,8 +21,11 @@ tells you when it's ready (with **Print Now**, if you were printing):
 | System | Command |
 | --- | --- |
 | macOS, or Linux with Homebrew | `brew install readbysearch/tap/code2pdf` |
-| Ubuntu 24.04+, Debian 13+ | `curl -fL -o /tmp/code2pdf_all.deb https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf_all.deb && sudo apt install /tmp/code2pdf_all.deb` |
-| Other Linux, no sudo | `curl -sSL https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh \| bash -s -- --user` |
+| Ubuntu 24.04+, Debian 13+ | `wget https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf_all.deb && sudo apt install ./code2pdf_all.deb` |
+| Other Linux, no sudo | `wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh \| bash -s -- --user` |
+
+`curl -LO` and `curl -sSL` work in place of `wget` and `wget -qO-`. The extension's install
+button uses whichever of the two the machine has (a fresh Ubuntu desktop has only `wget`).
 
 On Windows, use [WSL](https://code.visualstudio.com/docs/remote/wsl): open your folder in WSL,
 install code2pdf there, and print from that window. Over Remote SSH, code2pdf runs on the remote

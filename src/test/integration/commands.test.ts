@@ -247,7 +247,7 @@ describe("code2pdf", () => {
         }, async () => {
           assert.equal(await vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")), undefined);
           assert.match(warnings[0] ?? "", /code2pdf command-line tool, which isn't installed/);
-          assert.match(sent[0] ?? "", /^brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb|install\.sh \| bash -s -- --user$/);
+          assert.match(sent[0] ?? "", /^brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb'$|bash -s -- --user'$/);
           assert.ok(!fs.existsSync(pdf));
           installed = true;  // the terminal finished
           for (let i = 0; i < 100 && !fs.existsSync(pdf); i++) {

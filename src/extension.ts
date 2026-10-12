@@ -182,7 +182,7 @@ function howToInstall(old?: cli.Code2pdf): { install?: { label: string; command:
     return {
       install: update,
       message: `This extension needs code2pdf ${cli.MIN_VERSION.join(".")} or later, and ${old.command} is ${old.version}.` +
-        (update ? ` It can be updated with: ${update.command}` : ""),
+        (update ? ` It updates ${update.how}, in a terminal.` : ""),
     };
   }
   let release;
@@ -193,7 +193,7 @@ function howToInstall(old?: cli.Code2pdf): { install?: { label: string; command:
   }
   const install = installCommand(process.platform, hasBrew(), release);
   if (install) {
-    return { install, message: `This extension prints with the code2pdf command-line tool, which isn't installed. It installs with: ${install.command}` };
+    return { install, message: `This extension prints with the code2pdf command-line tool, which isn't installed. It installs ${install.how}, in a terminal.` };
   }
   if (process.platform === "darwin") {
     return { message: "This extension prints with the code2pdf command-line tool, which isn't installed. It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run \"code2pdf: Install the Command-Line Tool\"." };

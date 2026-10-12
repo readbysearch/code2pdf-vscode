@@ -11,8 +11,20 @@ const INSTALL_SH = "https://raw.githubusercontent.com/readbysearch/code2pdf/main
 export interface InstallCommand {
   /** Button label, such as "Install with Homebrew". */
   label: string;
+  /** How, in words: "with Homebrew (brew install readbysearch/tap/code2pdf)". */
+  how: string;
   /** Run in a terminal, where the user sees it and can answer prompts (sudo, for one). */
   command: string;
+}
+
+/**
+ * Fetch URL with curl or wget, whichever is there: fresh Ubuntu desktops have wget but not
+ * curl. Inside `bash -c '…'`, so it works whatever shell the terminal runs (zsh, fish, …).
+ */
+function fetch(url: string, to: string): string {
+  return to === "-"
+    ? `if command -v curl >/dev/null; then curl -fsSL ${url}; else wget -qO- ${url}; fi`
+    : `if command -v curl >/dev/null; then curl -fL -o ${to} ${url}; else wget -O ${to} ${url}; fi`;
 }
 
 /** What `/etc/os-release` says, as far as it matters here. */
@@ -34,17 +46,20 @@ export function debWorks(release: OsRelease): boolean {
 
 const brew = (verb: "install" | "upgrade"): InstallCommand => ({
   label: verb === "install" ? "Install with Homebrew" : "Update with Homebrew",
+  how: `with Homebrew (brew ${verb} readbysearch/tap/code2pdf)`,
   command: `brew ${verb} readbysearch/tap/code2pdf`,
 });
 
 const deb = (verb: "Install" | "Update"): InstallCommand => ({
   label: `${verb} the .deb`,
-  command: `curl -fL -o /tmp/code2pdf_all.deb ${DEB_URL} && sudo apt install /tmp/code2pdf_all.deb`,
+  how: "from code2pdf's .deb package, with apt (it asks for your password)",
+  command: `bash -c '${fetch(DEB_URL, "/tmp/code2pdf_all.deb")} && sudo apt install /tmp/code2pdf_all.deb'`,
 });
 
 const installScript = (verb: "Install" | "Update", where: "--user" | "--system"): InstallCommand => ({
   label: where === "--user" ? `${verb} (no sudo)` : verb,
-  command: `curl -sSL ${INSTALL_SH} | bash -s -- ${where}`,
+  how: where === "--user" ? "with code2pdf's install.sh, into ~/.local (no sudo)" : "with code2pdf's install.sh, for all users",
+  command: `bash -c '${fetch(INSTALL_SH, "-")} | bash -s -- ${where}'`,
 });
 
 /** How to install code2pdf here, or undefined when only the guide can help. */
