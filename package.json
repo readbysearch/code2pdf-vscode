@@ -48,9 +48,6 @@
     }
   },
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onWalkthrough:start"
-  ],
   "contributes": {
     "commands": [
       {

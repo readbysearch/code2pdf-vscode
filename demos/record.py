@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record the README's demo GIFs: drive VS Code on the virtual screen (desktop.sh) with xdotool,
+"""Record the README's demo GIFs (hero: the opening one; then folder, choose, selection, changes): drive VS Code on the virtual screen (desktop.sh) with xdotool,
 record it with ffmpeg, and turn each clip into a GIF. Runs inside the container (record.sh).
 
 Click positions are for the 1280x800 screen at window.zoomLevel 1 with the settings in
@@ -57,11 +57,14 @@ def wait(seconds):
 
 
 def shot(name):
-    subprocess.run(["import", "-window", "root", f"{OUT}/{name}.png"], env=ENV, check=True)
+    """A screenshot in the output folder, when DEMO_SHOTS is set: for finding click positions."""
+    if os.environ.get("DEMO_SHOTS"):
+        subprocess.run(["import", "-window", "root", f"{OUT}/{name}.png"], env=ENV, check=True)
 
 
-def start_vscode():
-    """A fresh project and a fresh VS Code window on it (the same starting point for every clip)."""
+def start_vscode(project=PROJECT, make=None):
+    """A fresh project and a fresh VS Code window on it (the same starting point for every clip).
+    MAKE builds the project (default: the demo weather tool)."""
     # Quit the last window, and wait until VS Code has really gone: a new `code` started while the
     # old one is still exiting joins it, and its window dies with it
     subprocess.run(["pkill", "-f", "/usr/share/code/code"], check=False)
@@ -72,10 +75,13 @@ def start_vscode():
     else:
         subprocess.run(["pkill", "-9", "-f", "/usr/share/code/code"], check=False)
         wait(1)
-    subprocess.run(["/demos/make-project.sh", PROJECT], check=True, stdout=subprocess.DEVNULL)
+    if make:
+        make(project)
+    else:
+        subprocess.run(["/demos/make-project.sh", project], check=True, stdout=subprocess.DEVNULL)
     for f in os.listdir(os.path.expanduser("~/printouts")):
         os.remove(os.path.join(os.path.expanduser("~/printouts"), f))
-    subprocess.Popen(["code", "--no-sandbox", "--disable-gpu", "--password-store=basic", "--disable-workspace-trust", PROJECT],
+    subprocess.Popen(["code", "--no-sandbox", "--disable-gpu", "--password-store=basic", "--disable-workspace-trust", project],
                      env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     wait(9)
     x("mousemove", 640, 400)
@@ -115,6 +121,46 @@ def warm_up():
     click(193, 510)
     wait(4)
     x("key", "Escape")
+
+
+def this_repository(project):
+    """This repository at HEAD (record.sh puts it in /out/repo.tar), as a git repo of its own."""
+    subprocess.run(["rm", "-rf", project], check=True)
+    subprocess.run(["tar", "-xf", f"{OUT}/repo.tar", "-C", os.path.dirname(project)], check=True)
+    # Half the pages (the licence text, the tests, these demo scripts), so the opening clip stays
+    # short: the project's own exclude setting, as a user would trim a print
+    os.makedirs(f"{project}/.vscode", exist_ok=True)
+    with open(f"{project}/.vscode/settings.json", "w") as f:
+        f.write('{ "code2pdf.exclude": ["LICENSE", "src/test", "demos"] }\n')
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["-c", "user.name=readbysearch", "-c", "user.email=readbysearch@users.noreply.github.com", "commit", "-qm", "code2pdf for VS Code"]):
+        subprocess.run(["git", *args], cwd=project, check=True)
+
+
+def demo_hero():
+    """For the top of the README: the Command Palette, the command typed out, the progress, the PDF."""
+    start_vscode(os.path.expanduser("~/code2pdf-vscode"), this_repository)
+    with Recording("demo-hero"):
+        wait(0.7)
+        x("key", "ctrl+shift+p")
+        wait(0.6)
+        x("type", "--delay", "45", "code2pdf: Print All Source Files to PDF")
+        wait(0.8)
+        x("key", "Return")
+        move(1000, 640, seconds=0.8)       # towards the progress notification
+        # Until the PDF is there (code2pdf writes a hidden .code2pdf-….pdf first, then renames it)
+        pdf = os.path.expanduser("~/printouts/code2pdf-vscode.pdf")
+        for _ in range(120):
+            if os.path.exists(pdf):
+                break
+            wait(0.25)
+        wait(2.6)                          # VS Code opens it on the contents page
+        shot("hero-contents")
+        click(525, 698)                    # extension.ts in the contents: its page
+        move(1180, 700, seconds=0.6)
+        wait(2.6)
+    x("key", "ctrl+shift+m")               # (with DEMO_SHOTS) what VS Code's Problems panel says
+    wait(1)
+    shot("hero-problems")
 
 
 def demo_folder():
@@ -189,7 +235,7 @@ def demo_changes():
 
 
 if __name__ == "__main__":
-    names = sys.argv[1:] or ["folder", "choose", "selection", "changes"]
+    names = sys.argv[1:] or ["hero", "folder", "choose", "selection", "changes"]
     warm_up()
     for name in names:
         globals()[f"demo_{name}"]()
