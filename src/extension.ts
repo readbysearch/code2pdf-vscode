@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import * as args from "./args";
 import * as cli from "./cli";
 import * as git from "./git";
-import { INSTALL_GUIDE, installCommand, parseOsRelease, updateCommand } from "./install";
+import { INSTALL_GUIDE, type InstallCommand, installCommand, parseOsRelease, updateCommand } from "./install";
 import { type OutputReader, withElapsed } from "./progress";
 import * as specs from "./specs";
 import * as upgrade from "./upgrade";
@@ -216,7 +216,7 @@ async function checkInstalled(): Promise<boolean> {
 }
 
 /** The install (or update) command for this machine, and what to say about it. */
-function howToInstall(old?: cli.Code2pdf): { install?: { label: string; command: string }; message: string } {
+function howToInstall(old?: cli.Code2pdf): { install?: InstallCommand; message: string } {
   if (old) {
     const update = updateCommand(old, os.homedir());
     return {
@@ -273,7 +273,7 @@ async function offer({ install, message }: ReturnType<typeof howToInstall>): Pro
   const buttons = [...(install ? [install.label] : homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
   const choice = await vscode.window.showWarningMessage(message, ...buttons);
   if (install && choice === install.label) {
-    runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command);
+    runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command, install.asks);
   } else if (choice === "Open brew.sh") {
     void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));
   } else if (choice === "Installation Guide") {
@@ -304,13 +304,13 @@ async function installOrCheck(): Promise<undefined> {
   return undefined;
 }
 
-function runInTerminal(name: string, command: string): void {
+function runInTerminal(name: string, command: string, asks?: string): void {
   const terminal = vscode.window.createTerminal({ name });
   terminal.show();
   terminal.sendText(command);
   found = undefined;
   watchForInstall();
-  void vscode.window.showInformationMessage(`${name} is running in the terminal. You'll get a message here when it's ready.`);
+  void vscode.window.showInformationMessage(`${name} is running in the terminal. ${asks ? `${asks} ` : ""}You'll get a message here when it's ready.`);
 }
 
 function stopInstallWatch(): void {

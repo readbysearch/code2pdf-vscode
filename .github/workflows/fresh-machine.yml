@@ -1,0 +1,45 @@
+# A first print on machines without code2pdf: the extension offers the install, the real command
+# runs in VS Code's terminal, and Print Now prints. One machine per install path. Separate from
+# CI so the quick tests report in minutes; this runs on main, weekly, and by hand.
+name: Fresh machine
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "macOS, Homebrew", os: macos-latest }
+          - { name: "Ubuntu 24.04, .deb", os: ubuntu-latest, image: "ubuntu:24.04" }
+          - { name: "Ubuntu 22.04, install.sh", os: ubuntu-latest, image: "ubuntu:22.04" }
+    runs-on: ${{ matrix.os }}
+    name: Fresh machine, ${{ matrix.name }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fresh Ubuntu container (wget, python3; no curl, git or code2pdf)
+        if: matrix.image
+        run: docker run --rm -v "$PWD:/src:ro" ${{ matrix.image }} bash /src/test/fresh-machine.sh
+      - uses: actions/setup-node@v4
+        if: runner.os == 'macOS'
+        with:
+          node-version: 22
+      - name: The runner has Homebrew but not code2pdf
+        if: runner.os == 'macOS'
+        run: |
+          brew install poppler
+          npm ci
+          npx tsc -p .
+          CODE2PDF_TEST_FILES='out/test/fresh/*.test.js' npx vscode-test || {
+            echo "== Homebrew after the test"; brew list --versions code2pdf || true; ls -la /opt/homebrew/bin/code2pdf || true
+            ls -lt ~/Library/Logs/Homebrew 2>/dev/null | head; exit 1; }

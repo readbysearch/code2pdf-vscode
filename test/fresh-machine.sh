@@ -20,10 +20,10 @@ apt-get install -y -qq --no-install-recommends sudo wget python3 ca-certificates
 arch=$(dpkg --print-architecture); [ "$arch" = amd64 ] && arch=x64
 wget -q "https://nodejs.org/dist/v22.20.0/node-v22.20.0-linux-$arch.tar.xz" -O /tmp/node.tar.xz
 tar -xJf /tmp/node.tar.xz -C /opt && ln -sf /opt/node-v22.20.0-linux-$arch/bin/* /usr/local/bin/
-# The user. apt's "Do you want to continue?" is answered yes, standing in for typing it
+# The user, with sudo that doesn't ask for a password (standing in for typing it). The test
+# answers apt's "Do you want to continue? [Y/n]" in the terminal, as the user would.
 id tester >/dev/null 2>&1 || useradd -m -s /bin/bash tester
 echo "tester ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/tester
-echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90yes
 rm -rf /home/tester/ext && mkdir -p /home/tester/ext
 tar -C "$SRC" --exclude=./node_modules --exclude=./out --exclude=./.vscode-test --exclude='./*.vsix' -cf - . | tar -C /home/tester/ext -xf -
 chown -R tester:tester /home/tester/ext

@@ -26,6 +26,8 @@ test("install: Homebrew where there is one, else the .deb, else install.sh witho
   assert.match(installCommand("linux", false, { id: "ubuntu", versionId: "22.04" })?.command ?? "", /\| bash -s -- --user'$/);
   assert.match(installCommand("linux", false)?.command ?? "", /--user'$/);
   assert.equal(installCommand("win32", false), undefined);
+  assert.match(installCommand("darwin", true)?.asks ?? "", /type y in the terminal/, "Homebrew 7 asks before installing");
+  assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.asks ?? "", /password/);
 });
 
 test("update the way it was installed", () => {

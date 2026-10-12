@@ -15,6 +15,8 @@ export interface InstallCommand {
   how: string;
   /** Run in a terminal, where the user sees it and can answer prompts (sudo, for one). */
   command: string;
+  /** What it asks in the terminal, so the user knows to answer there. */
+  asks?: string;
 }
 
 /**
@@ -48,12 +50,15 @@ const brew = (verb: "install" | "upgrade"): InstallCommand => ({
   label: verb === "install" ? "Install with Homebrew" : "Update with Homebrew",
   how: `with Homebrew (brew ${verb} readbysearch/tap/code2pdf)`,
   command: `brew ${verb} readbysearch/tap/code2pdf`,
+  // Homebrew 7 asks before installing anything with dependencies
+  asks: "Homebrew lists what it will install and asks you to confirm: type y in the terminal.",
 });
 
 const deb = (verb: "Install" | "Update"): InstallCommand => ({
   label: `${verb} the .deb`,
   how: "from code2pdf's .deb package, with apt (it asks for your password)",
   command: `bash -c '${fetch(DEB_URL, "/tmp/code2pdf_all.deb")} && sudo apt install /tmp/code2pdf_all.deb'`,
+  asks: "apt asks for your password, then to confirm: answer in the terminal.",
 });
 
 const installScript = (verb: "Install" | "Update", where: "--user" | "--system"): InstallCommand => ({

@@ -16,21 +16,35 @@ interface Execution {
   read(): AsyncIterable<string>;
 }
 interface ShellEvents {
-  onDidStartTerminalShellExecution?: vscode.Event<{ execution: Execution }>;
+  onDidStartTerminalShellExecution?: vscode.Event<{ terminal: vscode.Terminal; execution: Execution }>;
   onDidEndTerminalShellExecution?: vscode.Event<{ execution: Execution; exitCode: number | undefined }>;
 }
 
-/** Logs every command run in a terminal, its output and exit code; failed() says if one failed. */
-function watchTerminals(): { failed: () => string | undefined; dispose: () => void } {
+/**
+ * Logs every command run in a terminal, its output and exit code, and answers y to a [y/n]
+ * question as the user would (Homebrew 7 asks before installing; apt asks to continue).
+ * failed() says if a command failed.
+ */
+function watchTerminals(): { failed: () => string | undefined; started: () => boolean | undefined; dispose: () => void } {
   const events = vscode.window as unknown as ShellEvents;
   const subscriptions: vscode.Disposable[] = [];
   let failure: string | undefined;
+  let started = false;
   if (events.onDidStartTerminalShellExecution) {
-    subscriptions.push(events.onDidStartTerminalShellExecution(async ({ execution }) => {
+    subscriptions.push(events.onDidStartTerminalShellExecution(async ({ terminal, execution }) => {
+      started = true;
       console.log(`[terminal] $ ${execution.commandLine.value}`);
+      let tail = "";
       for await (const data of execution.read()) {
         // eslint-disable-next-line no-control-regex
-        process.stdout.write(data.replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g, ""));
+        const text = data.replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g, "");
+        process.stdout.write(text);
+        tail = (tail + text).slice(-300);
+        if (/\[(y\/n|Y\/n|y\/N)\]\s*$/.test(tail)) {
+          console.log("\n[terminal] (the test types y, as the user would)");
+          terminal.sendText("y");
+          tail = "";
+        }
       }
     }));
   } else {
@@ -44,7 +58,12 @@ function watchTerminals(): { failed: () => string | undefined; dispose: () => vo
       }
     }));
   }
-  return { failed: () => failure, dispose: () => subscriptions.forEach((d) => d.dispose()) };
+  return {
+    failed: () => failure,
+    /** Whether a command started; undefined without shell integration events (can't tell). */
+    started: () => (events.onDidStartTerminalShellExecution ? started : undefined),
+    dispose: () => subscriptions.forEach((d) => d.dispose()),
+  };
 }
 
 function onPath(command: string): boolean {
@@ -58,7 +77,7 @@ function onPath(command: string): boolean {
 
 describe("first print without code2pdf (fresh machine)", () => {
   it("offers the install, runs it in the terminal, then prints", async function () {
-    this.timeout(30 * 60_000);
+    this.timeout(12 * 60_000);
     assert.ok(!onPath("code2pdf") && !fs.existsSync("/opt/homebrew/bin/code2pdf"), "this machine must not have code2pdf yet");
     await vscode.extensions.getExtension("readbysearch.code2pdf")?.activate();
     const project = (vscode.workspace.workspaceFolders ?? [])[0].uri.fsPath;
@@ -86,8 +105,11 @@ describe("first print without code2pdf (fresh machine)", () => {
       console.log(`Clicked "${warnings[0].buttons[0]}"; waiting for the terminal to install code2pdf…`);
       const started = Date.now();
       let lastReport = started;
-      while (!fs.existsSync(pdf) && !terminals.failed() && Date.now() - started < 28 * 60_000) {
+      // A good install takes 1-3 minutes (Homebrew on a CI runner: ~2)
+      while (!fs.existsSync(pdf) && !terminals.failed() && Date.now() - started < 10 * 60_000) {
         await new Promise((r) => setTimeout(r, 2000));
+        assert.ok(terminals.started() !== false || Date.now() - started < 2 * 60_000,
+          "after 2 minutes, nothing has run in the terminal");
         if (Date.now() - lastReport > 60_000) {
           lastReport = Date.now();
           const t = vscode.window.terminals.map((x) => `${x.name} (exit ${x.exitStatus?.code ?? "-"}, shell integration ${"shellIntegration" in x && x.shellIntegration ? "on" : "off"})`);

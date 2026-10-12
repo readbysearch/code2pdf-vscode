@@ -15,8 +15,9 @@ on macOS and Linux. Your code stays on your machine.
 The extension needs code2pdf 3.12 or later. When you install the extension, its **Get Started**
 page opens with the install as step 1, and **code2pdf: Install the Command-Line Tool** in the
 Command Palette does the same. If you print before installing it, the extension offers to install
-it then. Either way the install runs in a terminal, where you can see the command, and VS Code
-tells you when it's ready (with **Print Now**, if you were printing):
+it then. Either way the install runs in a terminal, where you can see the command and answer its
+questions (Homebrew asks you to confirm, apt asks for your password), and VS Code tells you when
+it's ready (with **Print Now**, if you were printing):
 
 | System | Command |
 | --- | --- |
