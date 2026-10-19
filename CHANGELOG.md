@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.1
+
+- Anonymous usage data, only when VS Code's telemetry is on: whether code2pdf was found, which
+  install people choose and whether it finished, and how prints end. It shows where people get
+  stuck. Nothing in them identifies you: no ID lasts beyond a session, and Azure is told not to
+  work out a location. The new `code2pdf.telemetry` setting turns them off for this extension
+  alone. [Usage data](https://github.com/readbysearch/code2pdf-vscode#usage-data)
+  lists everything that is sent, and the
+  [privacy policy](https://github.com/readbysearch/code2pdf-vscode/blob/main/PRIVACY.md) covers
+  the rest.
+
 ## 2.0.0
 
 A new extension, built on the [code2pdf](https://github.com/readbysearch/code2pdf) command-line

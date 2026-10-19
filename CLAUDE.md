@@ -17,6 +17,10 @@ README.md only.
 - `src/progress.ts`: reads code2pdf's stderr (`[2/3] … (50%)`, `Done: N pages`, `Warning:`,
   `Note:`, `Error:`); `-s` reports on stdout.
 - `src/install.ts`: install and update commands per platform and install kind.
+- `src/telemetry.ts`: anonymous usage events for Azure Application Insights, sent through
+  `vscode.env.createTelemetryLogger` (nothing when VS Code's telemetry is off or
+  `code2pdf.telemetry` is false, and nothing while `CONNECTION_STRING` is empty). `EVENTS` lists every field that may be sent; the sender drops
+  any other.
 - `src/upgrade.ts`: telling version 1 users what changed, once. VS Code doesn't say what an
   update came from, so it's inferred: version 1 settings set, or the first print is what
   activated the extension for the first time (a fresh Marketplace install opens the walkthrough,
@@ -37,6 +41,16 @@ README.md only.
   raising `MIN_VERSION` in `src/cli.ts` and saying so in the README.
 - `--files-from` takes no `--include`/`--exclude`, and `--changed` takes no `--include`
   (code2pdf refuses them).
+- Usage events carry names and values only: never paths, file names, code, or VS Code's own
+  IDs. No ID may outlive the session (`tags()`: a fresh `ai.session.id`, and `ai.location.ip`
+  0.0.0.0 so Azure doesn't geolocate). PRIVACY.md promises both. Events need VS Code's
+  telemetry on (the logger checks) and `code2pdf.telemetry`, which may only ever turn them off:
+  it stays application-scoped so a workspace can't turn it on, and there's no popup asking
+  (developers complain about both). A new field goes into `EVENTS`,
+  `telemetry.json` (a unit test compares them), the README's "Usage data" list and PRIVACY.md
+  together. Events are sent only by an installed extension
+  (`ExtensionMode.Production`), never under test or while debugging, so the sender is checked
+  by unit tests, and against Azure by installing the .vsix.
 - Untrusted workspaces aren't supported: code2pdf runs git, and a repository's git config can
   run programs.
 

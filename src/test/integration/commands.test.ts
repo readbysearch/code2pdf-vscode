@@ -55,6 +55,18 @@ describe("code2pdf", () => {
       "the fixture's outputFolder is set, so no test opens a real save dialog");
   });
 
+  it("code2pdf.telemetry: once you turn it off, a workspace can't turn it back on", async () => {
+    const config = () => vscode.workspace.getConfiguration("code2pdf");
+    assert.equal(config().get<boolean>("telemetry"), true, "on unless you turn it off");
+    await config().update("telemetry", false, vscode.ConfigurationTarget.Global);
+    try {
+      await assert.rejects(Promise.resolve(config().update("telemetry", true, vscode.ConfigurationTarget.Workspace)));
+      assert.equal(config().get<boolean>("telemetry"), false);
+    } finally {
+      await config().update("telemetry", undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
   it("registers its commands, and version 1's", async () => {
     const all = await vscode.commands.getCommands(true);
     for (const id of ["code2pdf.print", "code2pdf.chooseFiles", "code2pdf.printFile", "code2pdf.printSelection",

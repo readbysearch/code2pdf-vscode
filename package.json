@@ -2,7 +2,7 @@
   "name": "code2pdf",
   "displayName": "code2pdf: Print Code to PDF",
   "description": "Print source code as a PDF made for reading: a contents page, syntax highlighting, real line numbers and a bookmark per file. Print a folder, chosen files, a selection, or what changed in git with the changed lines marked.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "readbysearch",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -205,6 +205,17 @@
           "scope": "machine",
           "markdownDescription": "Path to the `code2pdf` command. Leave empty to find it on your `PATH` and in the usual install folders.",
           "order": 6
+        },
+        "code2pdf.telemetry": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "tags": [
+            "telemetry",
+            "usesOnlineServices"
+          ],
+          "markdownDescription": "Send anonymous usage data, which shows where people get stuck installing code2pdf and printing. It's sent only when VS Code's `#telemetry.telemetryLevel#` is `all` as well: that setting turns usage data off for VS Code and every extension, this one for code2pdf alone. [What is sent](https://github.com/readbysearch/code2pdf-vscode#usage-data)",
+          "order": 7
         },
         "code2pdf.blacklisted_folders": {
           "type": "array",

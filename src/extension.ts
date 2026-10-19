@@ -8,6 +8,7 @@ import * as git from "./git";
 import { INSTALL_GUIDE, type InstallCommand, installCommands, parseOsRelease, updateCommand } from "./install";
 import { type OutputReader, withElapsed } from "./progress";
 import * as specs from "./specs";
+import * as telemetry from "./telemetry";
 import * as upgrade from "./upgrade";
 
 let log: vscode.OutputChannel;
@@ -19,6 +20,10 @@ let generation = 0;
 let lastPrint: { id: string; args: unknown[] } | undefined;
 /** Checks every few seconds whether an install started from here has finished. */
 let installWatch: NodeJS.Timeout | undefined;
+/** The install started from a message: its button, and when. */
+let installing: { command: string; started: number } | undefined;
+/** Anonymous usage events (see telemetry.ts); undefined without a connection string. */
+let usage: vscode.TelemetryLogger | undefined;
 /** For telling version 1 users what changed (see upgrade.ts). */
 let activatedAt = 0;
 let firstActivation = false;
@@ -26,8 +31,15 @@ let commandsRun = 0;
 let fromVersion1 = false;
 const NOTE_SHOWN = "version1NoteShown";
 
+/** What a print command prints, for the usage events. */
+type PrintKind = "file" | "selection" | "folder" | "files" | "chosen" | "changes";
+
+/** Where the install or update message came from. */
+type OfferedFrom = "print" | "installCommand";
+
 /** A print, ready to run. */
 interface Job {
+  kind: PrintKind;
   /** Shown while it runs, such as "Printing src/app.py". */
   title: string;
   cwd: string;
@@ -50,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
   activatedAt = Date.now();
   firstActivation = !state.get<boolean>("activated");
   void state.update("activated", true);
+  startTelemetry(context);
   // Each returns the PDF's path, or undefined if nothing was printed
   const register = (id: string, handler: (...a: never[]) => Promise<string | undefined>) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, (...a: unknown[]) => {
@@ -79,10 +92,48 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
   // For the Get Started walkthrough: its first step is done once code2pdf is installed
-  void checkInstalled();
+  void checkInstalled().then((status) => record("activated", {
+    ...status,
+    homebrew: hasBrew(),
+    distro: process.platform === "linux" ? distro() : undefined,
+    firstActivation,
+  }));
 }
 
 export function deactivate() {}
+
+/** Usage events go through VS Code's logger, which sends nothing when telemetry is off. */
+function startTelemetry(context: vscode.ExtensionContext): void {
+  const target = telemetry.parseConnectionString(telemetry.CONNECTION_STRING);
+  // Only from an installed extension: debugging it (F5) would mix our own use into the data
+  if (!target || context.extensionMode !== vscode.ExtensionMode.Production) {
+    return;
+  }
+  const version = String(context.extension.packageJSON.version);
+  const common: Record<(typeof telemetry.COMMON)[number], string> = {
+    extension: version,
+    vscode: vscode.version,
+    app: vscode.env.appName,
+    platform: process.platform,
+    arch: process.arch,
+    remote: vscode.env.remoteName ?? "none",
+  };
+  usage = vscode.env.createTelemetryLogger(telemetry.sender(target, telemetry.tags(version)), {
+    ignoreBuiltInCommonProperties: true,
+    ignoreUnhandledErrors: true,
+    additionalCommonProperties: common,
+  });
+  context.subscriptions.push(usage);
+}
+
+/** Sends an event if VS Code's telemetry is on (the logger checks) and code2pdf.telemetry is too. */
+function record<E extends telemetry.EventName>(event: E, data: telemetry.EventData<E>): void {
+  // Read each time, so turning it off stops the next event. It can only turn events off: it's
+  // application-scoped, so a workspace's settings can't turn it back on.
+  if (vscode.workspace.getConfiguration("code2pdf").get<boolean>("telemetry", true)) {
+    usage?.logUsage(event, data);
+  }
+}
 
 /** At the start of each print command: does this look like someone updated from version 1? */
 function noteVersion1User(): void {
@@ -174,7 +225,7 @@ function settings(scope?: vscode.Uri) {
 
 // Finding code2pdf
 
-async function code2pdf(): Promise<cli.Code2pdf | undefined> {
+async function code2pdf(from: OfferedFrom = "print"): Promise<cli.Code2pdf | undefined> {
   if (found) {
     return found;
   }
@@ -182,6 +233,7 @@ async function code2pdf(): Promise<cli.Code2pdf | undefined> {
     const choice = await vscode.window.showWarningMessage(
       "code2pdf runs on macOS and Linux. On Windows, open your folder in WSL (the WSL extension), install code2pdf there, and print from that window.",
       "About WSL");
+    record("installOffered", { reason: "windows", from, offered: "About WSL", choice: choice ?? "dismissed" });
     if (choice) {
       void vscode.env.openExternal(vscode.Uri.parse("https://code.visualstudio.com/docs/remote/wsl"));
     }
@@ -193,11 +245,11 @@ async function code2pdf(): Promise<cli.Code2pdf | undefined> {
     return result;
   } catch (error) {
     if (error instanceof cli.NotInstalled) {
-      await offerInstall(error);
+      await offerInstall(error, from);
       return undefined;
     }
     if (error instanceof cli.TooOld) {
-      await offerUpdate(error.found);
+      await offerUpdate(error.found, from);
       return undefined;
     }
     throw error;
@@ -218,16 +270,32 @@ async function lookUp(): Promise<cli.Code2pdf> {
 }
 
 /** Sets the code2pdf.installed context (for the walkthrough), without any message. */
-async function checkInstalled(): Promise<boolean> {
-  let installed: boolean;
+async function checkInstalled(): Promise<telemetry.EventData<"activated">> {
+  let status: telemetry.EventData<"activated">;
   try {
-    await lookUp();
-    installed = true;
-  } catch {
-    installed = false;
+    const ready = await lookUp();
+    status = { cli: "found", cliVersion: ready.version, installKind: ready.installKind };
+  } catch (error) {
+    status = error instanceof cli.TooOld
+      ? { cli: "tooOld", cliVersion: error.found.version, installKind: error.found.installKind }
+      : { cli: error instanceof cli.NotInstalled ? (error.fromSetting ? "notAtSetting" : "missing") : "error" };
   }
-  await vscode.commands.executeCommand("setContext", "code2pdf.installed", installed);
-  return installed;
+  await vscode.commands.executeCommand("setContext", "code2pdf.installed", status.cli === "found");
+  return status;
+}
+
+function osRelease() {
+  try {
+    return parseOsRelease(fs.readFileSync("/etc/os-release", "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Such as "ubuntu 24.04". */
+function distro(): string | undefined {
+  const release = osRelease();
+  return release ? `${release.id} ${release.versionId}` : undefined;
 }
 
 /** The install (or update) command for this machine, and what to say about it. */
@@ -240,13 +308,7 @@ function howToInstall(old?: cli.Code2pdf): { installs: InstallCommand[]; message
         (update ? ` It updates ${update.how}, in a terminal.` : ""),
     };
   }
-  let release;
-  try {
-    release = parseOsRelease(fs.readFileSync("/etc/os-release", "utf8"));
-  } catch {
-    release = undefined;
-  }
-  const installs = installCommands(process.platform, hasBrew(), release);
+  const installs = installCommands(process.platform, hasBrew(), osRelease());
   const intro = fromVersion1 ? upgrade.INSTALL_INTRO : "This extension prints with the code2pdf command-line tool, which isn't installed.";
   if (installs.length) {
     return { installs, message: `${intro} It installs ${installs.map((i) => i.how).join(" or ")}, in a terminal.` };
@@ -266,29 +328,32 @@ function hasBrew(): boolean {
   return (process.env.PATH ?? "").split(path.delimiter).some((dir) => dir && fs.existsSync(path.join(dir, "brew")));
 }
 
-async function offerInstall(error: cli.NotInstalled): Promise<void> {
+async function offerInstall(error: cli.NotInstalled, from: OfferedFrom): Promise<void> {
   log.appendLine(`code2pdf not found; looked for: ${error.looked.join(", ")}`);
   if (error.fromSetting) {
     const choice = await vscode.window.showErrorMessage(
       `code2pdf isn't at ${error.looked[0]}, where the code2pdf.executable setting says it is.`, "Open Settings");
+    record("installOffered", { reason: "notAtSetting", from, offered: "Open Settings", choice: choice ?? "dismissed" });
     if (choice) {
       void vscode.commands.executeCommand("workbench.action.openSettings", "code2pdf.executable");
     }
     return;
   }
-  await offer(howToInstall());
+  await offer(howToInstall(), "missing", from);
 }
 
-async function offerUpdate(old: cli.Code2pdf): Promise<void> {
-  await offer(howToInstall(old));
+async function offerUpdate(old: cli.Code2pdf, from: OfferedFrom): Promise<void> {
+  await offer(howToInstall(old), "tooOld", from);
 }
 
-async function offer({ installs, message }: ReturnType<typeof howToInstall>): Promise<void> {
+async function offer({ installs, message }: ReturnType<typeof howToInstall>, reason: "missing" | "tooOld", from: OfferedFrom): Promise<void> {
   const homebrew = !installs.length && process.platform === "darwin";
   const buttons = [...installs.map((i) => i.label), ...(homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
   const choice = await vscode.window.showWarningMessage(message, ...buttons);
+  record("installOffered", { reason, from, offered: buttons.join(", "), choice: choice ?? "dismissed" });
   const install = installs.find((i) => i.label === choice);
   if (install) {
+    installing = { command: install.label, started: Date.now() };
     runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command, install.asks);
   } else if (choice === "Open brew.sh") {
     void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));
@@ -300,7 +365,7 @@ async function offer({ installs, message }: ReturnType<typeof howToInstall>): Pr
 /** The Install command (and the walkthrough's button): install, update, or say it's ready. */
 async function installOrCheck(): Promise<undefined> {
   if (process.platform === "win32") {
-    await code2pdf();  // explains WSL
+    await code2pdf("installCommand");  // explains WSL
     return undefined;
   }
   try {
@@ -309,9 +374,9 @@ async function installOrCheck(): Promise<undefined> {
     void show("info", `code2pdf ${ready.version} is installed (${ready.installKind}). Right-click a folder or file and choose Print to PDF.`);
   } catch (error) {
     if (error instanceof cli.NotInstalled) {
-      await offerInstall(error);
+      await offerInstall(error, "installCommand");
     } else if (error instanceof cli.TooOld) {
-      await offerUpdate(error.found);
+      await offerUpdate(error.found, "installCommand");
     } else {
       throw error;
     }
@@ -344,6 +409,7 @@ function watchForInstall(intervalMs = 3000): void {
     }
     if (Date.now() - started > 30 * 60_000) {
       stopInstallWatch();
+      installFinished({ outcome: "gaveUp" });
       return;
     }
     checking = true;
@@ -353,6 +419,7 @@ function watchForInstall(intervalMs = 3000): void {
         return;
       }
       stopInstallWatch();
+      installFinished({ outcome: "ready", cliVersion: ready.version, installKind: ready.installKind });
       log.appendLine(`code2pdf is ready: ${ready.command}, ${ready.version} (${ready.installKind})`);
       await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
       const retry = lastPrint;
@@ -367,6 +434,14 @@ function watchForInstall(intervalMs = 3000): void {
       checking = false;
     }
   }, intervalMs);
+}
+
+/** Records how the install started from a message ended (once). */
+function installFinished(data: telemetry.EventData<"installFinished">): void {
+  if (installing) {
+    record("installFinished", { ...data, command: installing.command, seconds: Math.round((Date.now() - installing.started) / 1000) });
+    installing = undefined;
+  }
 }
 
 // Where things are
@@ -412,7 +487,7 @@ async function pickWorkspaceFolder(placeHolder: string): Promise<vscode.Uri> {
 }
 
 /** Where to save NAME: the outputFolder setting, or a save dialog. Undefined if cancelled. */
-async function outputPath(name: string, workspace: string | undefined): Promise<string | undefined> {
+async function outputPath(name: string, workspace: string | undefined, kind: PrintKind): Promise<string | undefined> {
   const home = os.homedir();
   const folder = settings().outputFolder;
   if (folder) {
@@ -428,6 +503,7 @@ async function outputPath(name: string, workspace: string | undefined): Promise<
     title: "Save the PDF",
   });
   if (!uri) {
+    record("print", { kind, outcome: "saveCancelled", saveTo: "dialog" });
     return undefined;
   }
   await state.update("lastFolder", path.dirname(uri.fsPath));
@@ -480,11 +556,11 @@ async function printFile(uri?: vscode.Uri): Promise<string | undefined> {
   await savedOrStop(file, false);
   const root = workspaceFolderOf(file) ?? path.dirname(file.fsPath);
   const rel = specs.relativePath(root, file.fsPath);
-  const output = await outputPath(`${specs.fileNamePart(specs.stem(file.fsPath))}.pdf`, root);
+  const output = await outputPath(`${specs.fileNamePart(specs.stem(file.fsPath))}.pdf`, root, "file");
   if (!output) {
     return undefined;
   }
-  return execute({ title: `Printing ${rel}`, cwd: root, args: args.fileArgs(rel, output, settings(file).print), output });
+  return execute({ kind: "file", title: `Printing ${rel}`, cwd: root, args: args.fileArgs(rel, output, settings(file).print), output });
 }
 
 async function printSelection(): Promise<string | undefined> {
@@ -506,11 +582,11 @@ async function printSelection(): Promise<string | undefined> {
   const root = workspaceFolderOf(file) ?? path.dirname(file.fsPath);
   const rel = specs.relativePath(root, file.fsPath);
   const spec = specs.rangeSpec(rel, ranges);
-  const output = await outputPath(specs.selectionPdfName(file.fsPath, ranges), root);
+  const output = await outputPath(specs.selectionPdfName(file.fsPath, ranges), root, "selection");
   if (!output) {
     return undefined;
   }
-  return execute({ title: `Printing ${spec}`, cwd: root, args: args.fileArgs(spec, output, settings(file).print), output });
+  return execute({ kind: "selection", title: `Printing ${spec}`, cwd: root, args: args.fileArgs(spec, output, settings(file).print), output });
 }
 
 async function printWorkspace(): Promise<string | undefined> {
@@ -523,11 +599,11 @@ async function printFolder(folder: vscode.Uri): Promise<string | undefined> {
   }
   const root = workspaceFolderOf(folder) ?? folder.fsPath;
   const rel = specs.relativePath(root, folder.fsPath);
-  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root);
+  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root, "folder");
   if (!output) {
     return undefined;
   }
-  return execute({ title: `Printing ${rel === "." ? path.basename(root) : rel}`, cwd: root, args: args.folderArgs(rel, output, settings(folder).print), output });
+  return execute({ kind: "folder", title: `Printing ${rel === "." ? path.basename(root) : rel}`, cwd: root, args: args.folderArgs(rel, output, settings(folder).print), output });
 }
 
 /** The files code2pdf would print from FOLDER (relative to it), with the include and exclude settings. */
@@ -567,11 +643,12 @@ async function printMany(uris: vscode.Uri[]): Promise<string | undefined> {
   if (!files.length) {
     throw new Stop("There's nothing to print in the selected folders: code2pdf's selection found no source files.");
   }
-  const output = await outputPath(`${specs.fileNamePart(path.basename(root))}-selected.pdf`, root);
+  const output = await outputPath(`${specs.fileNamePart(path.basename(root))}-selected.pdf`, root, "files");
   if (!output) {
     return undefined;
   }
   return execute({
+    kind: "files",
     title: `Printing ${files.length} file${files.length === 1 ? "" : "s"}`,
     cwd: root,
     args: args.filesFromArgs(".", output, settings(uris[0]).print),
@@ -604,11 +681,12 @@ async function chooseFiles(uri?: vscode.Uri): Promise<string | undefined> {
   if (!picked?.length) {
     return undefined;
   }
-  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root);
+  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root, "chosen");
   if (!output) {
     return undefined;
   }
   return execute({
+    kind: "chosen",
     title: `Printing ${picked.length} file${picked.length === 1 ? "" : "s"}`,
     cwd: root,
     args: args.filesFromArgs(rel, output, settings(folder).print),
@@ -649,11 +727,11 @@ async function printChanges(target?: ChangesTarget): Promise<string | undefined>
     }
     ({ rev, name } = picked);
   }
-  const output = await outputPath(`${specs.fileNamePart(name)}.pdf`, folder);
+  const output = await outputPath(`${specs.fileNamePart(name)}.pdf`, folder, "changes");
   if (!output) {
     return undefined;
   }
-  return execute({ title: "Printing changes", cwd: folder, args: args.changedArgs(rev, ".", output, settings(vscode.Uri.file(folder)).print), output });
+  return execute({ kind: "changes", title: "Printing changes", cwd: folder, args: args.changedArgs(rev, ".", output, settings(vscode.Uri.file(folder)).print), output });
 }
 
 async function pickChanges(folder: string): Promise<{ rev: string; name: string } | undefined> {
@@ -700,6 +778,15 @@ async function execute(job: Job): Promise<string | undefined> {
     return undefined;
   }
   log.appendLine(`\n$ ${args.shellQuote([command.command, ...job.args])}${job.input ? " < list" : ""}    (in ${job.cwd})`);
+  const begun = Date.now();
+  const ended = (outcome: string, data: telemetry.EventData<"print"> = {}) => record("print", {
+    kind: job.kind,
+    outcome,
+    saveTo: settings().outputFolder ? "folderSetting" : "dialog",
+    openWith: settings().openWith,
+    seconds: Math.round((Date.now() - begun) / 100) / 10,
+    ...data,
+  });
   if (job.input) {
     const lines = job.input.trimEnd().split("\n");
     log.appendLine(lines.slice(0, 50).map((l) => `    ${l}`).join("\n") + (lines.length > 50 ? `\n    … ${lines.length - 50} more` : ""));
@@ -732,17 +819,20 @@ async function execute(job: Job): Promise<string | undefined> {
       } catch (error) {
         found = undefined;  // it was uninstalled or moved: look for it again next time
         const code = (error as NodeJS.ErrnoException).code;
+        ended("failed", { error: code ?? "exception" });
         throw code === "ENOENT" ? new Stop(`code2pdf is no longer at ${command.command}. Print again to look for it.`, "error") : error;
       } finally {
         clearInterval(ticker);
       }
     });
   if (result.cancelled) {
+    ended("cancelled");
     log.appendLine("Stopped.");
     vscode.window.setStatusBarMessage("code2pdf: stopped; nothing was written", 5000);
     return undefined;
   }
   if (result.code !== 0) {
+    ended("failed", { exitCode: String(result.code) });
     if (result.code === 127 || result.code === 126) {
       found = undefined;
     }
@@ -750,9 +840,11 @@ async function execute(job: Job): Promise<string | undefined> {
     return undefined;
   }
   if (!fs.existsSync(job.output)) {
+    ended("noPdf");
     void showWithOutput("error", `code2pdf finished, but there's no PDF at ${job.output}.`);
     return undefined;
   }
+  ended("printed", { pages: result.reader.pages ?? 0, warnings: result.reader.warnings.length });
   await finished(job.output, result.reader);
   showVersion1Note();
   return job.output;

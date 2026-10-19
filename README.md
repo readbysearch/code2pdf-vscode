@@ -8,7 +8,9 @@ lines marked in the margin.
 ![Opening the Command Palette, typing "code2pdf: Print All Source Files to PDF" and pressing Enter: a progress notification counts the pages, then the 46-page PDF opens on its contents page, and clicking extension.ts there jumps to its code](images/demo-hero.gif)
 
 The extension runs the [code2pdf](https://github.com/readbysearch/code2pdf) command-line tool,
-on macOS and Linux. Your code stays on your machine.
+on macOS and Linux. Your code stays on your machine. Anonymous [usage data](#usage-data) is sent
+only when VS Code's telemetry is on, and `code2pdf.telemetry` turns it off for this extension
+alone.
 
 ## Install code2pdf first
 
@@ -125,6 +127,7 @@ it last changed in git; a print of changes marks the changed lines with a bar in
 | `code2pdf.include` | `[]` | Globs to add when printing a folder: `*.json`, `.github`, `vendor/mylib`. |
 | `code2pdf.exclude` | `[]` | Globs to leave out when printing a folder or changes: `tests`, `*_test.go`, `docs/**/*.md`. |
 | `code2pdf.executable` | empty | The path to `code2pdf`, if it isn't on your `PATH` or in the usual install folders. |
+| `code2pdf.telemetry` | `true` | Send anonymous [usage data](#usage-data), when VS Code's telemetry is on as well. `false` turns it off for this extension alone. |
 
 Without `/`, a glob matches names at any depth; with `/`, it matches the path from the folder.
 Put `include` and `exclude` in a workspace's `.vscode/settings.json` to set them per project.
@@ -153,6 +156,31 @@ different:
 - **It no longer touches files it shouldn't.** Version 1 deleted the PDFs in `/tmp`, saved each
   file it printed again (adding a final newline where one was missing), and left an empty file
   behind for a name with a space in it.
+
+## Usage data
+
+When VS Code's telemetry is on, the extension sends a few anonymous events, to show where people
+get stuck getting code2pdf and printing. It sends nothing when `telemetry.telemetryLevel` is
+`off`, `crash` or `error`, which turns usage data off for VS Code and every extension, or when
+`code2pdf.telemetry` is `false`, which turns it off for this extension alone. A project's
+settings can't turn it back on.
+
+- **When it starts:** whether code2pdf was found, its version and how it was installed, whether
+  Homebrew is installed, and on Linux the distribution and its version.
+- **When it offers to install or update code2pdf:** why, the buttons it showed, and the one you
+  chose.
+- **When an install it started is done**, or after 30 minutes without one: how long it took.
+- **When a print ends:** what was printed (a file, some lines, a folder, chosen files or
+  changes), whether it printed, failed or was cancelled, the pages, how long it took, and
+  whether the PDF's place came from the save dialog or the `code2pdf.outputFolder` setting.
+
+Each event also carries the versions of the extension and VS Code, the editor's name, the
+operating system and processor type, the kind of remote session, and a random ID for this
+session, which isn't saved. Never your name, file names, paths or code, and no ID that lasts.
+Events go to Azure Application Insights, in the EU. The extension tells Azure not to work out a
+location from your IP address, and Azure doesn't store the address. They're deleted after 90
+days. `telemetry.json` in the extension lists every field, and the [privacy policy](PRIVACY.md)
+has the details.
 
 ## Also from code2pdf
 

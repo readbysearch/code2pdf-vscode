@@ -1,0 +1,52 @@
+{
+  "commonProperties": {
+    "extension": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The extension's version." },
+    "vscode": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "VS Code's version." },
+    "app": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The editor's name, such as Visual Studio Code or Cursor." },
+    "platform": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "darwin, linux or win32." },
+    "arch": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Processor type, such as arm64 or x64." },
+    "remote": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The kind of remote session (ssh-remote, wsl, dev-container…), or none." }
+  },
+  "events": {
+    "readbysearch.code2pdf/activated": {
+      "owner": "readbysearch",
+      "comment": "Once each time the extension starts: whether code2pdf is there, and which installs this machine could use.",
+      "cli": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "found, missing, tooOld, notAtSetting (the executable setting points nowhere) or error." },
+      "cliVersion": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "code2pdf's version, when found." },
+      "installKind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "How code2pdf was installed, as code2pdf --version says: Homebrew, Debian package, install.sh…" },
+      "homebrew": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Whether Homebrew is installed." },
+      "distro": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "On Linux, the distribution and its version, such as ubuntu 24.04." },
+      "firstActivation": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Whether the extension starts for the first time on this machine." }
+    },
+    "readbysearch.code2pdf/installOffered": {
+      "owner": "readbysearch",
+      "comment": "The message offering to install or update code2pdf was answered or closed.",
+      "reason": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "missing, tooOld, notAtSetting, or windows (code2pdf needs WSL there)." },
+      "from": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "print (a print command) or installCommand (the Install command or the Get Started page)." },
+      "offered": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The buttons shown." },
+      "choice": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The button chosen, or dismissed." }
+    },
+    "readbysearch.code2pdf/installFinished": {
+      "owner": "readbysearch",
+      "comment": "An install started from the message finished, or 30 minutes passed without code2pdf appearing.",
+      "outcome": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "ready or gaveUp." },
+      "command": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The install button chosen, such as Install with Homebrew." },
+      "seconds": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "Time since the button was chosen.", "isMeasurement": true },
+      "cliVersion": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The installed code2pdf's version." },
+      "installKind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "How it was installed, as code2pdf --version says." }
+    },
+    "readbysearch.code2pdf/print": {
+      "owner": "readbysearch",
+      "comment": "A print ended, or its save dialog was closed without saving.",
+      "kind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "file, selection, folder, files (several selected), chosen (checked in a list) or changes." },
+      "outcome": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "printed, failed, cancelled, noPdf or saveCancelled." },
+      "saveTo": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "dialog, or folderSetting (code2pdf.outputFolder is set)." },
+      "openWith": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The code2pdf.openWith setting: viewer, editor or none." },
+      "seconds": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "How long code2pdf ran.", "isMeasurement": true },
+      "pages": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Pages in the PDF.", "isMeasurement": true },
+      "warnings": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "How many warnings code2pdf gave.", "isMeasurement": true },
+      "exitCode": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "code2pdf's exit code, when it failed." },
+      "error": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "The system error code, such as ENOENT, when code2pdf couldn't be run." }
+    }
+  }
+}

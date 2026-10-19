@@ -7,3 +7,4 @@
 !out/*.js
 !images/pages.png
 !media/install.md
+!telemetry.json
