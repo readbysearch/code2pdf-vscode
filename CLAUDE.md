@@ -53,6 +53,15 @@ README.md only.
   by unit tests, and against Azure by `test/usage-data.sh` before each release.
 - Untrusted workspaces aren't supported: code2pdf runs git, and a repository's git config can
   run programs.
+- No personal data or credentials in commits or their history, anywhere: files, comments, test
+  data or commit messages. That means no email addresses, names, account, subscription or tenant
+  IDs, local paths such as `/Users/<name>`, tokens or keys. Commits are authored as
+  `readbysearch <readbysearch@users.noreply.github.com>`. Name an account by its role and look
+  values up at run time, as `test/azure-setup.sh` does. The one exception is the connection
+  string in `src/telemetry.ts`: it can only send events, and every copy of the extension carries
+  it. Before each push, search what it adds (`git log -p origin/main..HEAD`). If something got
+  pushed, a fix in a new commit leaves it in the public history: say so, and rewrite history
+  only with the user's OK.
 
 ## Testing
 
