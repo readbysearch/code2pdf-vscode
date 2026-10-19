@@ -50,7 +50,7 @@ README.md only.
   `telemetry.json` (a unit test compares them), the README's "Usage data" list and PRIVACY.md
   together. Events are sent only by an installed extension
   (`ExtensionMode.Production`), never under test or while debugging, so the sender is checked
-  by unit tests, and against Azure by installing the .vsix.
+  by unit tests, and against Azure by `test/usage-data.sh` before each release.
 - Untrusted workspaces aren't supported: code2pdf runs git, and a repository's git config can
   run programs.
 
@@ -64,7 +64,19 @@ npx vscode-test              # integration, in a downloaded VS Code (.vscode-tes
 VSCODE_TEST_VERSION=1.90.0 npx vscode-test   # the oldest VS Code in engines
 CODE2PDF_TEST_FILES='out/test/manual/*.test.js' npx vscode-test   # opens a PDF in the viewer
 npm run test:fresh           # first print on fresh Ubuntu 24.04 and 22.04 containers (needs Docker)
+test/usage-data.sh           # usage data against Azure (needs `az login`; macOS, or Linux with a display)
 ```
+
+`test/usage-data.sh` is the only check of what really reaches Azure. It checks the resources
+still match PRIVACY.md (Sweden Central, 90 days, IP addresses not stored) and that
+`CONNECTION_STRING` is the real resource's. It sends an event with and one without
+`ai.location.ip`: only the second may get a location. Then it rebuilds the .vsix to send to
+`code2pdf-vscode-test` and installs it in a separate VS Code profile with a helper extension
+(`test/usage-data/driver/`). That prints one file three times: with VS Code's telemetry off,
+with `code2pdf.telemetry` off, and with both on. Only the last run may send events, and those
+must have no location, user ID or path. Nothing goes into the real resource's numbers.
+`test/azure-setup.sh` creates or repairs the resources (the budget alert too); it never
+re-creates `code2pdf-vscode`, whose connection string the extension ships.
 
 `test/fresh-machine.sh` makes a container look like a fresh Ubuntu desktop (wget and python3;
 no curl, git or code2pdf) and runs `src/test/fresh/`: the real install command runs in VS
@@ -81,8 +93,9 @@ pickers and messages. CI (`.github/workflows/ci.yml`) runs on Ubuntu (the .deb; 
 
 1. Bump `version` in package.json (above the version on the Marketplace) and add a
    CHANGELOG.md entry.
-2. `npm run lint && npm run test:unit && npx vscode-test`, then `npx vsce package` and
-   `npx vsce ls` to check the contents (only out/*.js, icon, README, CHANGELOG, LICENSE).
+2. `npm run lint && npm run test:unit && npx vscode-test && test/usage-data.sh`, then
+   `npx vsce package` and `npx vsce ls` to check the contents (only out/*.js, telemetry.json,
+   the icon and images/pages.png, media/install.md, README, CHANGELOG, LICENSE).
 3. Commit as readbysearch and push `main` (`gh auth switch -u readbysearch`; switch back to
    waleking afterwards), wait for CI, then tag `vX.Y.Z` and push the tag.
 4. Publish: upload the .vsix at https://marketplace.visualstudio.com/manage/publishers/readbysearch

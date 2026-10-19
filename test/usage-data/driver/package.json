@@ -1,0 +1,11 @@
+{
+  "name": "code2pdf-check-driver",
+  "description": "Prints one file with the installed code2pdf extension, for test/usage-data.sh",
+  "publisher": "local",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": { "vscode": "^1.90.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "files": ["extension.js"]
+}
