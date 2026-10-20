@@ -16,8 +16,8 @@ test("reads Windows' Desktop from the registry, where OneDrive may have moved it
 
 test("reads a Linux desktop's own name for its Desktop folder", () => {
   const dirs = '# written by xdg-user-dirs-update\nXDG_DESKTOP_DIR="$HOME/桌面"\nXDG_DOWNLOAD_DIR="$HOME/下载"\n';
-  assert.equal(save.parseUserDirs(dirs, "/home/a"), "/home/a/桌面");
-  assert.equal(save.parseUserDirs('XDG_DESKTOP_DIR="/data/desk"\n', "/home/a"), "/data/desk");
+  assert.equal(save.parseUserDirs(dirs, "/home/a"), path.normalize("/home/a/桌面"));
+  assert.equal(save.parseUserDirs('XDG_DESKTOP_DIR="/data/desk"\n', "/home/a"), path.normalize("/data/desk"));
   assert.equal(save.parseUserDirs('XDG_DESKTOP_DIR="$HOME/"\n', "/home/a"), undefined, "$HOME means no Desktop folder");
   assert.equal(save.parseUserDirs('XDG_DOWNLOAD_DIR="$HOME/Downloads"\n', "/home/a"), undefined);
 });
