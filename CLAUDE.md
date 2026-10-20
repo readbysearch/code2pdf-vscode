@@ -140,7 +140,7 @@ scripts skip on Windows (`POSIX_ONLY`).
    its LICENSE and spinner), media/viewer.js and viewer.css, telemetry.json, the icon and
    images/pages.png, media/install.md, README, CHANGELOG, LICENSE).
 3. Commit as readbysearch and push `main` (`gh auth switch -u readbysearch`; switch back to
-   waleking afterwards), wait for CI, then tag `vX.Y.Z` and push the tag.
+   your own account afterwards), wait for CI, then tag `vX.Y.Z` and push the tag.
 4. Publish: upload the .vsix at https://marketplace.visualstudio.com/manage/publishers/readbysearch
    (signed in as the publisher's owner), or `npx vsce publish` with an Azure DevOps PAT
    (Marketplace: Manage scope, all accessible organizations; PATs expire).
