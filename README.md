@@ -76,8 +76,8 @@ runs on that machine: install it there, as on Linux. Print Changes uses git; on 
 ## Printing
 
 Right-click in the Explorer, an editor, an editor tab or the Source Control menu, or run the
-commands from the Command Palette (they start with "code2pdf"). The PDF is saved on your Desktop
-and opens in a VS Code tab, as in the clips below.
+commands from the Command Palette (they start with "code2pdf"). The PDF is saved in a
+`code2pdf_generated_pdf` folder in the project and opens in a VS Code tab, as in the clips below.
 
 ### A folder
 
@@ -123,12 +123,19 @@ the **code2pdf** output panel.
 
 ### Where the PDF goes
 
-Each PDF is saved on your Desktop without asking (in Documents, or your home folder, if there's
-no Desktop), and opens in a VS Code tab. Printing the same thing again replaces its PDF, and the
-open tab shows the new one. A file of the same name that code2pdf didn't make is never replaced:
-the new PDF is then `util (2).pdf`, say. To save somewhere else, run **code2pdf: Choose Where PDFs
-Go…** and pick the workspace folder (as version 1 did), another folder, or a save dialog each
-time.
+Each PDF is saved without asking in a `code2pdf_generated_pdf` folder in the workspace folder,
+and opens in a VS Code tab. git ignores that folder: code2pdf puts a `.gitignore` in it when it
+makes it, so it never shows in `git status` and your own `.gitignore` isn't changed. (Tools that
+don't read `.gitignore` still see it: add it to `.dockerignore` if you build images from the
+project.) A file opened on its own, outside any workspace folder, goes to
+`~/code2pdf_generated_pdf`.
+
+Printing the same thing again replaces its PDF, and the open tab shows the new one. A file of the
+same name that code2pdf didn't make is never replaced: the new PDF is then `util (2).pdf`, say. To
+save somewhere else, run **code2pdf: Choose Where PDFs Go…** and pick your Desktop, the workspace
+folder itself (as version 1 did), another folder, or a save dialog each time. On a Mac, the first
+PDF saved on the Desktop, or in Documents or Downloads, makes macOS ask once whether VS Code may
+access files there.
 
 The tab shows the page you're on, zooms, and follows the contents page's links. **Open in Default
 App** opens the PDF in your computer's PDF viewer, to print it on paper. Over Remote SSH and in
@@ -146,7 +153,7 @@ it last changed in git; a print of changes marks the changed lines with a bar in
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `code2pdf.outputFolder` | empty | Where PDFs go. Empty: your Desktop (Documents, or your home folder, if there's no Desktop). `.` is the workspace folder. |
+| `code2pdf.outputFolder` | empty | Where PDFs go. Empty: `code2pdf_generated_pdf` in the workspace folder, which git ignores. `.` is the workspace folder itself; `~/Desktop`, the Desktop. |
 | `code2pdf.askWhereToSave` | `false` | `true` asks where to save each PDF instead. |
 | `code2pdf.openWith` | `editor` | Open the PDF in a VS Code tab (`editor`), in your computer's PDF `viewer`, or `none`. |
 | `code2pdf.theme` | `paper` | `paper`, `mono` (black and white, for printers), or any Pygments style, such as `github-dark`. |
@@ -165,10 +172,10 @@ different:
 
 - **It needs the code2pdf tool** instead of Vim, Ghostscript and jq. The first print offers to
   install it.
-- **PDFs go to your Desktop.** Version 1 saved `merged.pdf` (or `<file>.pdf`) into the project
-  folder. To save into the project again, run **code2pdf: Choose Where PDFs Go…** and pick the
-  workspace folder, or set `code2pdf.outputFolder` to `.`. A folder's PDF is then named after the
-  folder, such as `shop.pdf`.
+- **PDFs go into a `code2pdf_generated_pdf` folder** in the project, which git ignores. Version 1
+  saved `merged.pdf` (or `<file>.pdf`) into the project folder itself. To do that again, run
+  **code2pdf: Choose Where PDFs Go…** and pick the workspace folder itself, or set
+  `code2pdf.outputFolder` to `.`. A folder's PDF is named after the folder, such as `shop.pdf`.
 - **More files are printed.** Version 1 printed only `.py` and `.sh` files, plus `README.md` and
   `launch.json`. Version 2 prints all common source code, Markdown, YAML and TOML, and skips
   build output, virtual environments and hidden folders. Use `code2pdf.exclude` to leave files
@@ -199,9 +206,9 @@ settings can't turn it back on.
 - **When an install it started is done**, fails or is cancelled, or after 30 minutes without
   one: how long it took.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or
-  changes), whether it printed, failed or was cancelled, the pages, how long it took, and
-  and two settings: where PDFs go (the Desktop, a folder you set, or a save dialog) and what
-  opens them.
+  changes), whether it printed, failed or was cancelled, the pages, how long it took, and two
+  settings: where PDFs go (the project's folder for them, a folder you set, or a save dialog) and
+  what opens them.
 
 Each event also carries the versions of the extension and VS Code, the editor's name, the
 operating system and processor type, the kind of remote session, and a random ID for this

@@ -94,7 +94,7 @@ describe("code2pdf", () => {
       cliModule.find = realFind;  // now it's installed
       await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
       const first = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
-      assert.equal(first.filter((m) => m.startsWith("code2pdf 2: PDFs now go to your Desktop")).length, 1, first.join(" | "));
+      assert.equal(first.filter((m) => m.startsWith("code2pdf 2: PDFs now go into the project's code2pdf_generated_pdf folder")).length, 1, first.join(" | "));
       const second = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
       assert.ok(!second.some((m) => m.startsWith("code2pdf 2:")), "only once");
     } finally {
@@ -233,13 +233,9 @@ describe("code2pdf", () => {
     }
   });
 
-  it("saves on the Desktop without asking, and never over a file it didn't make", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const saveModule = require("../../save") as { defaultFolder: () => Promise<string> };
-    const realDefault = saveModule.defaultFolder;
-    const desktop = fs.mkdtempSync(path.join(path.dirname(process.env.CODE2PDF_TEST_PDFS ?? os.tmpdir()), "desktop-"));
-    fs.writeFileSync(path.join(desktop, "util.pdf"), "someone else's util.pdf");
-    saveModule.defaultFolder = () => Promise.resolve(desktop);
+  it("saves into the project's code2pdf_generated_pdf without asking, which git ignores, and never over a file it didn't make", async () => {
+    const folder = path.join(project(), "code2pdf_generated_pdf");
+    fs.rmSync(folder, { recursive: true, force: true });
     // A first print, so this one isn't taken for a version 1 user's (they hear where PDFs go in their own note)
     await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
     const config = vscode.workspace.getConfiguration("code2pdf");
@@ -251,30 +247,38 @@ describe("code2pdf", () => {
         asked = true;
         return Promise.resolve(undefined);
       }, async () => {
-        const mine = path.join(desktop, "util (2).pdf");
-        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")), mine);
-        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")), mine, "printed again: replaced");
+        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")), path.join(folder, "util.pdf"));
+        fs.writeFileSync(path.join(folder, "app.pdf"), "someone else's app.pdf");
+        const mine = path.join(folder, "app (2).pdf");
+        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/app.py")), mine);
+        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/app.py")), mine, "printed again: replaced");
       }));
       assert.ok(!asked, "no save dialog");
-      assert.equal(fs.readFileSync(path.join(desktop, "util.pdf"), "utf8"), "someone else's util.pdf");
-      assert.deepEqual(fs.readdirSync(desktop).sort(), ["util (2).pdf", "util.pdf"]);
-      assert.equal(shown.filter((m) => /^Saved util \(2\)\.pdf, \d+ pages? in .+\. PDFs go there unless you choose another place\.$/.test(m)).length, 1,
+      assert.equal(fs.readFileSync(path.join(folder, "app.pdf"), "utf8"), "someone else's app.pdf");
+      assert.deepEqual(fs.readdirSync(folder).sort(), [".gitignore", "app (2).pdf", "app.pdf", "util.pdf"]);
+      assert.equal(shown.filter((m) => /^Saved util\.pdf, \d+ pages? in .+code2pdf_generated_pdf, which git ignores\. PDFs go there unless you choose another place\.$/.test(m)).length, 1,
         `says where, once: ${shown.join(" | ")}`);
+      const git = (...a: string[]) => execFileSync("git", a, { cwd: project(), encoding: "utf8" });
+      assert.doesNotMatch(git("status", "--porcelain", "--untracked-files=all"), /code2pdf_generated_pdf/, "git doesn't show it");
+      git("check-ignore", "-q", "code2pdf_generated_pdf/util.pdf");
     } finally {
-      saveModule.defaultFolder = realDefault;
       await config.update("outputFolder", outputFolder, vscode.ConfigurationTarget.Workspace);
+      fs.rmSync(folder, { recursive: true, force: true });
     }
   });
 
-  it("Choose Where PDFs Go sets the folder, or asking each time", async () => {
+  it("Choose Where PDFs Go sets the folder, the Desktop, or asking each time", async () => {
     const config = vscode.workspace.getConfiguration("code2pdf");
     const outputFolder = config.inspect<string>("outputFolder")?.workspaceValue;
     const choose = (which: (item: vscode.QuickPickItem) => boolean) => messages(() => stubbed("showQuickPick",
       (items: vscode.QuickPickItem[]) => Promise.resolve(items.find(which)),
       () => vscode.commands.executeCommand("code2pdf.chooseOutputFolder")));
     const now = () => vscode.workspace.getConfiguration("code2pdf");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const desktop = await (require("../../save") as { desktop: () => Promise<string | undefined> }).desktop();
+    const spelled = (p: string) => (process.platform === "linux" ? path.resolve(p) : path.resolve(p).toLowerCase());
     try {
-      await choose((i) => /The workspace folder/.test(i.label));
+      await choose((i) => /The workspace folder itself/.test(i.label));
       assert.equal(now().inspect<string>("outputFolder")?.workspaceValue, ".", "changed where it's set: this workspace");
       await choose((i) => /Ask each time/.test(i.label));
       assert.equal(now().get<boolean>("askWhereToSave"), true);
@@ -284,7 +288,14 @@ describe("code2pdf", () => {
         return Promise.resolve(undefined);
       }, () => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
       assert.ok(asked, "asks where to save");
-      await choose((i) => /the Desktop/.test(i.description ?? ""));
+      if (desktop) {
+        const shown = await choose((i) => i.description === "the Desktop");
+        const set = now().inspect<string>("outputFolder")?.workspaceValue ?? "";
+        assert.equal(spelled(set.replace(/^~(?=\/)/, os.homedir())), spelled(desktop), set);
+        assert.equal(now().get<boolean>("askWhereToSave"), false);
+        assert.ok(shown.some((m) => m.startsWith("PDFs will go to ")), shown.join(" | "));
+      }
+      await choose((i) => /code2pdf_generated_pdf in the workspace folder/.test(i.label));
       assert.equal(now().inspect<string>("outputFolder")?.workspaceValue, undefined);
       assert.equal(now().get<boolean>("askWhereToSave"), false);
     } finally {

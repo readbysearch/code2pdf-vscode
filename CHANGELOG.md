@@ -6,11 +6,14 @@
   contents page's links. **Open in Default App** opens the PDF in your computer's PDF viewer, to
   print it on paper. It works over Remote SSH and in WSL too. Set `code2pdf.openWith` to `viewer`
   for the PDF viewer, as before.
-- PDFs are saved on your Desktop without asking (in Documents, or your home folder, if there's no
-  Desktop), and the first one says where it went. Printing the same thing again replaces its PDF,
-  and the open tab shows the new one; a file code2pdf didn't make is never replaced. **code2pdf:
-  Choose Where PDFs Go…** picks the workspace folder (as version 1 did), another folder, or a save
-  dialog each time (the new `code2pdf.askWhereToSave` setting).
+- PDFs are saved without asking, in a `code2pdf_generated_pdf` folder in the project that git
+  ignores: it holds its own `.gitignore`, so yours isn't changed. The first one says where it
+  went. On a Mac, macOS doesn't have to ask whether VS Code may use the Desktop, and over Remote
+  SSH, in WSL and in dev containers the PDFs are next to the code. Printing the same thing again
+  replaces its PDF, and the open tab shows the new one; a file code2pdf didn't make is never
+  replaced. **code2pdf: Choose Where PDFs Go…** picks the Desktop, the workspace folder itself (as
+  version 1 did), another folder, or a save dialog each time (the new `code2pdf.askWhereToSave`
+  setting).
 
 ## 2.1.0
 

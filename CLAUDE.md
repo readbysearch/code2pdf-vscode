@@ -31,10 +31,14 @@ README.md only.
   `vscode.env.createTelemetryLogger` (nothing when VS Code's telemetry is off or
   `code2pdf.telemetry` is false, and nothing while `CONNECTION_STRING` is empty). `EVENTS` lists every field that may be sent; the sender drops
   any other.
-- `src/save.ts`: where a PDF goes without asking: the Desktop (Windows' registry, which knows
-  where OneDrive moved it; XDG's user-dirs on Linux, where it may be `~/桌面`), else Documents,
-  else home. `freePath` never replaces a file code2pdf didn't make from the same print: the
-  `pdfsMade` list in globalState maps each PDF to what it was printed from.
+- `src/save.ts`: where a PDF goes without asking: `code2pdf_generated_pdf` in the workspace
+  folder, made with a `.gitignore` of `*` so git never shows it (the project's own `.gitignore`
+  is left alone); else in the home folder. Not the Desktop: on a Mac the first write there makes
+  macOS ask whether VS Code may access it, and a "no" sticks; remotes and containers have none.
+  The Desktop is a choice in Choose Where PDFs Go (Windows' registry, which knows where OneDrive
+  moved it; XDG's user-dirs on Linux, where it may be `~/桌面`). `freePath` never replaces a file
+  code2pdf didn't make from the same print: the `pdfsMade` list in globalState maps each PDF to
+  what it was printed from.
 - `src/viewer.ts`, `media/viewer.js`, `media/viewer.css`: the PDF tab, a custom editor
   (`code2pdf.pdf`, priority `option`, so it never takes over other PDFs) whose webview runs
   pdf.js. The extension sends the file's bytes (as a plain Uint8Array: a Node Buffer arrives as

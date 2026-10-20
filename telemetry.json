@@ -40,7 +40,7 @@
       "comment": "A print ended, or its save dialog was closed without saving.",
       "kind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "file, selection, folder, files (several selected), chosen (checked in a list) or changes." },
       "outcome": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "printed, failed, cancelled, noPdf or saveCancelled." },
-      "saveTo": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "default (the Desktop, or Documents or the home folder if there's none), folderSetting (code2pdf.outputFolder is set), or dialog (code2pdf.askWhereToSave)." },
+      "saveTo": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "default (code2pdf_generated_pdf in the workspace folder, or in the home folder if there's none), folderSetting (code2pdf.outputFolder is set), or dialog (code2pdf.askWhereToSave)." },
       "openWith": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The code2pdf.openWith setting: editor (a VS Code tab), viewer or none." },
       "seconds": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "How long code2pdf ran.", "isMeasurement": true },
       "pages": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "Pages in the PDF.", "isMeasurement": true },

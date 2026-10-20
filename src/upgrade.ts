@@ -30,8 +30,8 @@ export function cameFromVersion1(s: Signs): boolean {
 export const WHATS_NEW = "https://github.com/readbysearch/code2pdf-vscode#coming-from-version-1";
 
 export const NOTE =
-  "code2pdf 2: PDFs now go to your Desktop and open in a VS Code tab (set code2pdf.outputFolder to \".\" to save " +
-  "into the project, as version 1 did), and it prints all common source code, not only .py and .sh files.";
+  "code2pdf 2: PDFs now go into the project's code2pdf_generated_pdf folder, which git ignores, and open in a VS Code " +
+  "tab; it prints all common source code, not only .py and .sh files.";
 
 export const INSTALL_INTRO =
   "Version 2 of this extension prints with the code2pdf command-line tool instead of Vim and Ghostscript, and code2pdf isn't installed.";

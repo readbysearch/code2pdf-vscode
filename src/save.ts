@@ -1,5 +1,6 @@
-// Where a PDF goes when nobody is asked: the Desktop, found the way each system keeps it, and a
-// name there that doesn't replace a file code2pdf didn't make. No vscode imports.
+// Where a PDF goes when nobody is asked: a folder in the project that git ignores, and a name
+// there that doesn't replace a file code2pdf didn't make. Also the Desktop, found the way each
+// system keeps it, for those who choose it. No vscode imports.
 
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
@@ -48,10 +49,56 @@ function isFolder(dir: string): boolean {
   }
 }
 
+/** The folder in the project that PDFs go to when nobody chose one. */
+export const FOLDER = "code2pdf_generated_pdf";
+
+/** Put in FOLDER when it's made, so git never shows it or offers to commit it. */
+export const GITIGNORE = "# Made by code2pdf for the PDFs it prints: git ignores this folder.\n*\n";
+
+function writable(dir: string): boolean {
+  try {
+    fs.accessSync(dir, fs.constants.W_OK);
+    return isFolder(dir);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * FOLDER in PROJECT (the workspace folder printed from), made with a .gitignore if it's new; in
+ * the home folder if there's no project, or it can't be written to. VS Code can already reach
+ * the project, so on a Mac this never asks for access to the Desktop or Documents, and on a
+ * remote or in a container the PDFs are where the code is.
+ */
+export function pdfFolder(project: string | undefined, home = os.homedir()): string {
+  for (const dir of project ? [project, home] : [home]) {
+    const folder = path.join(dir, FOLDER);
+    try {
+      fs.mkdirSync(folder);
+      fs.writeFileSync(path.join(folder, ".gitignore"), GITIGNORE);
+    } catch {
+      // There already, or this place can't be written to
+    }
+    if (writable(folder)) {
+      return folder;
+    }
+  }
+  return home;
+}
+
+/** Whether git ignores DIR because code2pdf's .gitignore is in it. */
+export function ignored(dir: string): boolean {
+  try {
+    return fs.readFileSync(path.join(dir, ".gitignore"), "utf8") === GITIGNORE;
+  } catch {
+    return false;
+  }
+}
+
 let cached: string | undefined;
 
-/** The folder PDFs go to: the Desktop, else Documents, else the home folder. */
-export async function defaultFolder(home = os.homedir(), env = process.env, platform = process.platform): Promise<string> {
+/** The Desktop, or undefined if there's none (a server, or a container). */
+export async function desktop(home = os.homedir(), env = process.env, platform = process.platform): Promise<string | undefined> {
   if (cached && isFolder(cached)) {
     return cached;
   }
@@ -66,11 +113,11 @@ export async function defaultFolder(home = os.homedir(), env = process.env, plat
     }
   }
   desktops.push(path.join(home, "Desktop"));
-  cached = [...desktops, path.join(home, "Documents")].find((dir) => dir !== undefined && isFolder(dir)) ?? home;
+  cached = desktops.find((dir) => dir !== undefined && isFolder(dir));
   return cached;
 }
 
-/** For tests: forget the folder found. */
+/** For tests: forget the Desktop found. */
 export function forget(): void {
   cached = undefined;
 }
@@ -107,8 +154,8 @@ export function remember(made: Record<string, string>, file: string, source: str
   return Object.fromEntries([...kept, [file, source] as [string, string]].slice(-limit));
 }
 
-/** "~/Desktop" rather than the full path, for messages. */
+/** "~/Desktop" rather than the full path, for messages and settings (with / on Windows too, which expandHome reads). */
 export function tilde(dir: string, home = os.homedir()): string {
   const relative = path.relative(home, dir);
-  return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? path.join("~", relative) : dir;
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? `~/${relative.split(path.sep).join("/")}` : dir;
 }

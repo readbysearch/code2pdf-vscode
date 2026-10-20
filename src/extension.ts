@@ -572,11 +572,15 @@ async function pickWorkspaceFolder(placeHolder: string): Promise<vscode.Uri> {
   return folder.uri;
 }
 
-/** The folder PDFs go to without asking: the outputFolder setting, or the Desktop (save.ts). */
+/**
+ * The folder PDFs go to without asking: the outputFolder setting, or code2pdf_generated_pdf in
+ * WORKSPACE (save.ts). Not next to a file opened on its own, which may be in Downloads, say:
+ * macOS may ask before VS Code writes there.
+ */
 async function saveFolder(workspace: string | undefined): Promise<string> {
   const folder = settings().outputFolder;
   if (!folder) {
-    return save.defaultFolder();
+    return save.pdfFolder(workspace && workspaceFolderOf(vscode.Uri.file(workspace)) ? workspace : undefined);
   }
   const absolute = specs.expandHome(folder, os.homedir());
   return path.isAbsolute(absolute) ? absolute : path.join(workspace ?? os.homedir(), absolute);
@@ -599,7 +603,7 @@ async function outputPath(name: string, workspace: string | undefined, kind: Pri
   let pdf: string;
   if (settings().askWhereToSave) {
     const last = state.get<string>("lastFolder");
-    const start = last && isFolder(last) ? last : await save.defaultFolder();
+    const start = last && isFolder(last) ? last : (await save.desktop()) ?? os.homedir();
     const uri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(path.join(start, name)),
       filters: { PDF: ["pdf"] },
@@ -996,8 +1000,9 @@ async function finished(pdf: string, reader: OutputReader, savedBy: ReturnType<t
     return;
   }
   const where = remote ? `${pdf} (on ${remote})` : pdf;
+  const dir = path.dirname(pdf);
   const message = sayWhere
-    ? `Saved ${name}${pages} in ${save.tilde(path.dirname(pdf))}. PDFs go there unless you choose another place.${remark}`
+    ? `Saved ${name}${pages} in ${save.tilde(dir)}${save.ignored(dir) ? ", which git ignores" : ""}. PDFs go there unless you choose another place.${remark}`
     : opened ? `Saved ${name}${pages}.${remark}` : `Saved ${where}${pages}.${remark}`;
   const buttons = [
     ...(opened ? [] : remote ? ["Open in VS Code"] : ["Open"]),
@@ -1033,12 +1038,18 @@ async function updateSetting(key: string, value: unknown): Promise<void> {
 /** The Choose Where PDFs Go command, and the Change… button after the first PDF. */
 async function chooseOutputFolder(): Promise<undefined> {
   const { outputFolder, askWhereToSave } = settings();
-  const desktop = await save.defaultFolder();
-  const now = askWhereToSave ? "ask" : outputFolder === "." ? "project" : outputFolder ? "other" : "desktop";
+  const home = os.homedir();
+  const desktop = await save.desktop();
+  const setTo = outputFolder && path.resolve(specs.expandHome(outputFolder, home));
+  const now = askWhereToSave ? "ask"
+    : !outputFolder ? "default"
+    : outputFolder === "." ? "project"
+    : desktop && setTo && save.samePath(setTo, desktop) ? "desktop" : "other";
   type Item = vscode.QuickPickItem & { choice: typeof now };
   const items: Item[] = [
-    { choice: "desktop", label: save.tilde(desktop), description: "the Desktop, or Documents if there's none" },
-    { choice: "project", label: "The workspace folder", description: "next to the code, as version 1 did" },
+    { choice: "default", label: `${save.FOLDER} in the workspace folder`, description: "git ignores it" },
+    ...(desktop ? [{ choice: "desktop" as const, label: save.tilde(desktop), description: "the Desktop" }] : []),
+    { choice: "project", label: "The workspace folder itself", description: "next to the code, as version 1 did" },
     { choice: "other", label: "Another folder…", description: now === "other" ? outputFolder : undefined },
     { choice: "ask", label: "Ask each time", description: "a save dialog for every PDF" },
   ];
@@ -1056,12 +1067,14 @@ async function chooseOutputFolder(): Promise<undefined> {
     void show("info", "code2pdf will ask where to save each PDF.");
     return undefined;
   }
-  let folder: string | undefined;  // undefined: the default, the Desktop
+  let folder: string | undefined;  // undefined: the default, code2pdf_generated_pdf
   if (picked.choice === "project") {
     folder = ".";
+  } else if (picked.choice === "desktop" && desktop) {
+    folder = save.tilde(desktop);  // "~/Desktop" works on each Mac and Linux machine that Settings Sync shares it with
   } else if (picked.choice === "other") {
     const chosen = await vscode.window.showOpenDialog({
-      canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: "Save PDFs Here", defaultUri: vscode.Uri.file(desktop),
+      canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: "Save PDFs Here", defaultUri: vscode.Uri.file(desktop ?? home),
     });
     if (!chosen?.[0]) {
       return undefined;
@@ -1070,6 +1083,11 @@ async function chooseOutputFolder(): Promise<undefined> {
   }
   await updateSetting("outputFolder", folder);
   await updateSetting("askWhereToSave", undefined);
-  void show("info", `PDFs will go ${folder === "." ? "into the workspace folder" : `to ${save.tilde(folder ?? desktop)}`}, without asking.`);
+  const where = folder === undefined ? `into ${save.FOLDER} in the workspace folder`
+    : folder === "." ? "into the workspace folder" : `to ${save.tilde(specs.expandHome(folder, home))}`;
+  // macOS asks before VS Code, or code2pdf, writes to the Desktop for the first time
+  const mac = picked.choice === "desktop" && process.platform === "darwin" && !vscode.env.remoteName
+    ? ` If macOS asks whether ${vscode.env.appName} may access files in your Desktop folder, choose Allow.` : "";
+  void show("info", `PDFs will go ${where}, without asking.${mac}`);
   return undefined;
 }

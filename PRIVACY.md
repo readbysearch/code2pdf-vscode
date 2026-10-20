@@ -24,7 +24,7 @@ readbysearch. Last changed on 20 October 2026, for version 2.2.0.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or changes),
   whether it printed, failed, was cancelled or its save dialog was closed, the number of pages
   and warnings, how long it took, code2pdf's exit code if it failed, and two settings: whether
-  PDFs go to the Desktop, a set folder or a save dialog, and what opens them.
+  PDFs go to the project's folder for them, a set folder or a save dialog, and what opens them.
 
 Every event also carries the versions of the extension and VS Code, the editor's name (such as
 Visual Studio Code or Cursor), the operating system, the processor type, the kind of remote

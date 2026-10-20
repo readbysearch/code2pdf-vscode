@@ -22,22 +22,36 @@ test("reads a Linux desktop's own name for its Desktop folder", () => {
   assert.equal(save.parseUserDirs('XDG_DOWNLOAD_DIR="$HOME/Downloads"\n', "/home/a"), undefined);
 });
 
-test("PDFs go to the Desktop, else Documents, else the home folder", async () => {
+test("PDFs go into code2pdf_generated_pdf in the project, which git ignores, else in the home folder's", () => {
+  const home = tempDir();
+  const project = tempDir();
+  const folder = save.pdfFolder(project, home);
+  assert.equal(folder, path.join(project, "code2pdf_generated_pdf"));
+  assert.equal(fs.readFileSync(path.join(folder, ".gitignore"), "utf8"), save.GITIGNORE);
+  assert.ok(save.ignored(folder));
+  fs.writeFileSync(path.join(folder, ".gitignore"), "!*.pdf\n");
+  assert.equal(save.pdfFolder(project, home), folder);
+  assert.equal(fs.readFileSync(path.join(folder, ".gitignore"), "utf8"), "!*.pdf\n", "a folder that's there is left as it is");
+  assert.ok(!save.ignored(folder));
+  assert.equal(save.pdfFolder(undefined, home), path.join(home, "code2pdf_generated_pdf"), "no project");
+  assert.equal(save.pdfFolder(path.join(project, "gone"), home), path.join(home, "code2pdf_generated_pdf"), "a project it can't write to");
+});
+
+test("finds the Desktop, or says there's none", async () => {
   const home = tempDir();
   const env = { XDG_CONFIG_HOME: path.join(home, "config") };
-  const folder = async (platform: NodeJS.Platform) => {
+  const found = async (platform: NodeJS.Platform) => {
     save.forget();
-    return save.defaultFolder(home, env, platform);
+    return save.desktop(home, env, platform);
   };
-  assert.equal(await folder("darwin"), home, "neither: the home folder");
   fs.mkdirSync(path.join(home, "Documents"));
-  assert.equal(await folder("darwin"), path.join(home, "Documents"));
+  assert.equal(await found("darwin"), undefined, "a server, or a container");
   fs.mkdirSync(path.join(home, "Desktop"));
-  assert.equal(await folder("darwin"), path.join(home, "Desktop"));
+  assert.equal(await found("darwin"), path.join(home, "Desktop"));
   fs.mkdirSync(path.join(home, "config"));
   fs.mkdirSync(path.join(home, "桌面"));
   fs.writeFileSync(path.join(home, "config", "user-dirs.dirs"), 'XDG_DESKTOP_DIR="$HOME/桌面"\n');
-  assert.equal(await folder("linux"), path.join(home, "桌面"), "the desktop's own name for it");
+  assert.equal(await found("linux"), path.join(home, "桌面"), "the desktop's own name for it");
   save.forget();
 });
 
@@ -68,7 +82,8 @@ test("remembers the latest PDFs made, each once", () => {
 });
 
 test("says ~/Desktop rather than the whole path", () => {
-  assert.equal(save.tilde(path.join("/home/a", "Desktop"), "/home/a"), path.join("~", "Desktop"));
+  assert.equal(save.tilde(path.join("/home/a", "Desktop"), "/home/a"), "~/Desktop");
+  assert.equal(save.tilde(path.join("/home/a", "OneDrive", "Desktop"), "/home/a"), "~/OneDrive/Desktop", "/ on Windows too");
   assert.equal(save.tilde("/elsewhere", "/home/a"), "/elsewhere");
   assert.equal(save.tilde("/home/a", "/home/a"), "/home/a");
 });

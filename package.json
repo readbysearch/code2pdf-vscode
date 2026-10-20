@@ -161,7 +161,7 @@
         "code2pdf.outputFolder": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Folder to save PDFs in, such as `~/Documents/printouts`. Leave empty for your Desktop (or Documents, or your home folder, if there's no Desktop). `.` is the workspace folder, as version 1 did; a relative path is relative to the workspace folder. [Choose Where PDFs Go](command:code2pdf.chooseOutputFolder)",
+          "markdownDescription": "Folder to save PDFs in, such as `~/Desktop` or `~/Documents/printouts`. Leave empty for a `code2pdf_generated_pdf` folder in the workspace folder, which git ignores (it holds its own `.gitignore`). `.` is the workspace folder itself, as version 1 did; a relative path is relative to the workspace folder. [Choose Where PDFs Go](command:code2pdf.chooseOutputFolder)",
           "order": 1
         },
         "code2pdf.askWhereToSave": {
