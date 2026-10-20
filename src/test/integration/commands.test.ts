@@ -234,7 +234,10 @@ describe("code2pdf", () => {
     }
   });
 
-  it("keeps the elapsed time moving while code2pdf is quiet", async () => {
+  // The fake code2pdf in these two is a shell script, which Windows can't run
+  const posixIt = process.platform === "win32" ? it.skip : it;
+
+  posixIt("keeps the elapsed time moving while code2pdf is quiet", async () => {
     const fake = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "code2pdf-fake-")), "code2pdf");
     fs.writeFileSync(fake, [
       "#!/bin/sh",
@@ -270,6 +273,16 @@ describe("code2pdf", () => {
     const realFind = cliModule.find;
     let installed = false;
     cliModule.find = (setting: string) => (installed ? realFind(setting) : Promise.reject(new cliModule.NotInstalled(["code2pdf"], false)));
+    // On Windows, Install downloads the Windows build: here it only records where it would go
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const downloadModule = require("../../download") as { installWindowsBuild: (dir: string) => Promise<string> };
+    const realDownload = downloadModule.installWindowsBuild;
+    const downloadedTo: string[] = [];
+    downloadModule.installWindowsBuild = async (dir: string) => {
+      downloadedTo.push(dir);
+      installed = true;
+      return "code2pdf 3.13";
+    };
     const config = vscode.workspace.getConfiguration("code2pdf");
     await config.update("executable", "", vscode.ConfigurationTarget.Global);  // forget the code2pdf found earlier
     const pdf = path.join(process.env.CODE2PDF_TEST_PDFS ?? "", "util.pdf");
@@ -288,15 +301,21 @@ describe("code2pdf", () => {
         }, async () => {
           assert.equal(await vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")), undefined);
           assert.match(warnings[0] ?? "", /code2pdf command-line tool, which isn't installed/);
-          assert.match(sent[0] ?? "", /^brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb'$|bash -s -- --user'$/);
-          assert.ok(!fs.existsSync(pdf));
-          installed = true;  // the terminal finished
+          if (process.platform === "win32") {
+            assert.match(downloadedTo[0] ?? "", /\\Programs\\code2pdf$/, "Install downloads the Windows build, with no terminal");
+            assert.equal(sent.length, 0);
+          } else {
+            assert.match(sent[0] ?? "", /^brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb'$|bash -s -- --user'$/);
+            assert.ok(!fs.existsSync(pdf));
+            installed = true;  // the terminal finished
+          }
           for (let i = 0; i < 100 && !fs.existsSync(pdf); i++) {
             await new Promise((r) => setTimeout(r, 200));
           }
         })));
     } finally {
       cliModule.find = realFind;
+      downloadModule.installWindowsBuild = realDownload;
       await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
     }
     assert.ok(infos.some((m) => /^code2pdf \S+ is installed\.$/.test(m)), infos.join(" | "));
@@ -313,7 +332,7 @@ describe("code2pdf", () => {
     assert.match(commands.find((c) => c.command === "code2pdf.printWorkspace")?.title ?? "", /^Print All /);
   });
 
-  it("a lookup that finishes late doesn't bring back the old code2pdf", async () => {
+  posixIt("a lookup that finishes late doesn't bring back the old code2pdf", async () => {
     // Changing code2pdf.executable twice starts two lookups; the first (here made slow) ends last
     const fake = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "code2pdf-fake-")), "code2pdf");
     fs.writeFileSync(fake, [
