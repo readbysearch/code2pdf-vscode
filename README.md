@@ -5,7 +5,7 @@ highlighting, each file's own line numbers, its path on every page, and a bookma
 Print a folder, a few files, the lines you selected, or what changed in git, with the changed
 lines marked in the margin.
 
-![Opening the Command Palette, typing "code2pdf: Print All Source Files to PDF" and pressing Enter: a progress notification counts the pages, then the 46-page PDF opens on its contents page, and clicking extension.ts there jumps to its code](images/demo-hero.gif)
+![Opening the Command Palette, typing "code2pdf: Print All Source Files to PDF" and pressing Enter: a progress notification counts the pages, then the 94-page PDF, saved in the code2pdf_generated_pdf folder that appears in the Explorer, opens in a tab on its contents page, and clicking extension.ts there jumps to its code](images/demo-hero.gif)
 
 The extension runs the [code2pdf](https://github.com/readbysearch/code2pdf) command-line tool,
 on macOS, Linux and Windows. Your code stays on your machine. Anonymous [usage data](#usage-data) is sent

@@ -79,8 +79,6 @@ def start_vscode(project=PROJECT, make=None):
         make(project)
     else:
         subprocess.run(["/demos/make-project.sh", project], check=True, stdout=subprocess.DEVNULL)
-    for f in os.listdir(os.path.expanduser("~/printouts")):
-        os.remove(os.path.join(os.path.expanduser("~/printouts"), f))
     subprocess.Popen(["code", "--no-sandbox", "--disable-gpu", "--password-store=basic", "--disable-workspace-trust", project],
                      env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     wait(9)
@@ -118,8 +116,10 @@ def warm_up():
     start_vscode()
     click(111, 121, button=3)
     wait(1)
+    shot("warm-menu")
     click(193, 510)
     wait(4)
+    shot("warm-printed")
     x("key", "Escape")
 
 
@@ -148,16 +148,21 @@ def demo_hero():
         x("key", "Return")
         move(1000, 640, seconds=0.8)       # towards the progress notification
         # Until the PDF is there (code2pdf writes a hidden .code2pdf-….pdf first, then renames it)
-        pdf = os.path.expanduser("~/printouts/code2pdf-vscode.pdf")
+        pdf = os.path.expanduser("~/code2pdf-vscode/code2pdf_generated_pdf/code2pdf-vscode.pdf")
         for _ in range(120):
             if os.path.exists(pdf):
                 break
             wait(0.25)
         wait(2.6)                          # VS Code opens it on the contents page
         shot("hero-contents")
-        click(525, 698)                    # extension.ts in the contents: its page
+        move(820, 450)
+        scroll(3)                          # the contents' src/ files
+        wait(0.8)
+        shot("hero-scrolled")
+        click(525, 494)                    # extension.ts in the contents: its page
         move(1180, 700, seconds=0.6)
         wait(2.6)
+        shot("hero-end")
     x("key", "ctrl+shift+m")               # (with DEMO_SHOTS) what VS Code's Problems panel says
     wait(1)
     shot("hero-problems")
@@ -171,10 +176,12 @@ def demo_folder():
         wait(1.2)
         click(193, 510)                    # Print to PDF
         wait(2.6)                          # the contents page
+        shot("folder-contents")
         move(820, 450)
         scroll(19, delay=0.07)             # down to api.py
         move(1180, 700)                    # out of the way
         wait(2.6)
+        shot("folder-end")
 
 
 def demo_choose():
@@ -185,6 +192,7 @@ def demo_choose():
         wait(1.0)
         click(360, 778)                    # Choose Files and Print to PDF…
         wait(1.4)
+        shot("choose-list")
         click(302, 152)                    # uncheck pyproject.toml
         wait(0.5)
         click(302, 284)                    # uncheck tests/test_format.py
@@ -193,6 +201,7 @@ def demo_choose():
         click(973, 90)                     # OK
         move(1180, 700, seconds=0.6)
         wait(2.6)
+        shot("choose-end")
 
 
 def demo_selection():
@@ -209,11 +218,13 @@ def demo_selection():
         wait(1.1)
         click(661, 461)                    # Print Selection to PDF
         wait(1.8)
-        click(829, 96)                     # zoom in, twice
+        shot("selection-pdf")
+        click(766, 91)                     # zoom in, twice
         wait(0.3)
-        click(829, 96)
+        click(766, 91)
         move(1180, 700)
         wait(2.6)
+        shot("selection-end")
 
 
 def demo_changes():
@@ -226,12 +237,14 @@ def demo_changes():
         wait(1.2)
         click(470, 619)                    # Print Changes to PDF…
         wait(1.6)
+        shot("changes-pick")
         click(362, 150)                    # The last commit
         wait(2.2)
         move(820, 450)
         scroll(12)                         # down to the marked lines
         move(1180, 700)                    # out of the way
         wait(2.8)
+        shot("changes-end")
 
 
 if __name__ == "__main__":
