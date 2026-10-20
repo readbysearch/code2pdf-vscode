@@ -17,7 +17,8 @@ test("a repository without commits offers nothing", async () => {
   const dir = repo();
   write(dir, "a.py", "x = 1\n");
   assert.deepEqual(await git.changeChoices(dir), { main: [], commits: [] });
-  assert.equal(await git.repositoryRoot(dir), fs.realpathSync(dir));
+  // The long name: on Windows the temp folder's path can hold short names (RUNNER~1)
+  assert.equal(await git.repositoryRoot(dir), fs.realpathSync.native(dir));
 });
 
 test("one commit: nothing to compare it with, since code2pdf can't diff a first commit", async () => {

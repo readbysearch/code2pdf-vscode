@@ -33,8 +33,9 @@ async function maybe(cwd: string, args: readonly string[]): Promise<string | und
 }
 
 /** The top folder of the repository FOLDER is in, or undefined if it isn't in one. */
-export function repositoryRoot(folder: string): Promise<string | undefined> {
-  return maybe(folder, ["rev-parse", "--show-toplevel"]);
+export async function repositoryRoot(folder: string): Promise<string | undefined> {
+  const root = await maybe(folder, ["rev-parse", "--show-toplevel"]);
+  return root ? path.resolve(root) : undefined;  // on Windows git says C:/a/b
 }
 
 /** Whether REV names a commit (a hash, tag, branch, HEAD~2, …). */
