@@ -44,6 +44,8 @@ let pdfTab: viewer.PdfViewer;
 const MADE = "pdfsMade";
 /** Set once the first PDF saved without asking has said where it went. */
 const SAVE_NOTE_SHOWN = "saveNoteShown";
+/** What code2pdf.exe's --version said, by file (cli.VersionCache): Windows only. */
+const VERSIONS_SEEN = "versionsSeen";
 
 /** What a print command prints, for the usage events. */
 type PrintKind = "file" | "selection" | "folder" | "files" | "chosen" | "changes";
@@ -274,7 +276,7 @@ async function code2pdf(from: OfferedFrom = "print"): Promise<cli.Code2pdf | und
 function lookUp(): Promise<cli.Code2pdf> {
   const started = generation;
   if (looking?.generation !== started) {
-    const result = cli.find(settings().executable).then((ready) => {
+    const result = cli.find(settings().executable, versionCache()).then((ready) => {
       if (started === generation) {
         found = ready;
       }
@@ -301,10 +303,19 @@ async function lookUpShown(): Promise<cli.Code2pdf> {
   return result;
 }
 
-/** Forgets the code2pdf found, so the next print looks again. */
+/** Forgets the code2pdf found, and what its --version said, so the next print looks and asks again. */
 function forgetFound(): void {
   generation++;
   found = undefined;
+  void state.update(VERSIONS_SEEN, undefined);
+}
+
+function versionCache(): cli.VersionCache {
+  const seen = () => state.get<Record<string, cli.SeenVersion>>(VERSIONS_SEEN, {});
+  return {
+    get: (file) => seen()[file],
+    set: (file, version) => void state.update(VERSIONS_SEEN, { ...seen(), [file]: version }),
+  };
 }
 
 /** Sets the code2pdf.installed context (for the walkthrough), without any message. */
@@ -981,9 +992,7 @@ async function execute(job: Job): Promise<string | undefined> {
   }
   if (result.code !== 0) {
     ended("failed", { exitCode: String(result.code) });
-    if (result.code === 127 || result.code === 126) {
-      forgetFound();
-    }
+    forgetFound();  // it may be broken (a missing DLL, say): check it again before the next print
     void showWithOutput("error", `code2pdf: ${result.reader.errorMessage() ?? `stopped with exit code ${result.code}`}`);
     return undefined;
   }

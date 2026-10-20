@@ -10,7 +10,9 @@ README.md only.
 - `src/extension.ts`: commands, settings, messages; the only file that imports `vscode`.
 - `src/cli.ts`: finds code2pdf (setting, PATH, the installers' folders), checks
   `MIN_VERSION`, runs it with progress and cancellation (SIGINT to its process group, then
-  SIGKILL). On Windows a program without a console gets no Ctrl-C: `taskkill /T /F` ends
+  SIGKILL). On Windows, where code2pdf.exe can take seconds to start, what its `--version` said
+  is kept in globalState (`versionsSeen`) while the file's size and time stay the same; a failed
+  print forgets it. A print waits for a lookup already running (activation starts one). On Windows a program without a console gets no Ctrl-C: `taskkill /T /F` ends
   code2pdf.exe and its parts workers, and `removeLeftovers` deletes the `.code2pdf-*` files it
   left next to the PDF.
 - `src/args.ts`: the command line for each kind of print; version 1's settings mapped to options.

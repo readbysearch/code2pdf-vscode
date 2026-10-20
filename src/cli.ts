@@ -105,11 +105,57 @@ function versionOutput(command: string): Promise<string | undefined> {
   });
 }
 
-/** Finds code2pdf, or throws NotInstalled or TooOld. */
-export async function find(setting: string): Promise<Code2pdf> {
-  const looked = candidates(setting);
+/** What a program's `--version` said, with the size and time of the file it came from. */
+export interface SeenVersion {
+  size: number;
+  mtimeMs: number;
+  output: string;
+}
+
+/** Where find() remembers SeenVersions, by file (globalState, in the extension). */
+export interface VersionCache {
+  get(file: string): SeenVersion | undefined;
+  set(file: string, seen: SeenVersion): void;
+}
+
+/** On Windows, the file that running COMMAND starts: COMMAND if it's a path, else code2pdf.exe on PATH. */
+export function windowsProgram(command: string, env: NodeJS.ProcessEnv = process.env, exists: (file: string) => boolean = fs.existsSync): string | undefined {
+  if (path.win32.isAbsolute(command)) {
+    return command;
+  }
+  const key = Object.keys(env).find((k) => k.toLowerCase() === "path");
+  for (const dir of (key ? env[key] ?? "" : "").split(";")) {
+    const file = path.win32.join(dir.trim().replace(/^"(.*)"$/, "$1"), `${command}.exe`);
+    if (dir.trim() && exists(file)) {
+      return file;
+    }
+  }
+  return undefined;
+}
+
+function sizeAndTime(file: string): { size: number; mtimeMs: number } | undefined {
+  try {
+    const stat = fs.statSync(file);
+    return stat.isFile() ? { size: stat.size, mtimeMs: stat.mtimeMs } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Finds code2pdf, or throws NotInstalled or TooOld. On Windows, with a CACHE, what code2pdf.exe's
+ * --version said last time stands while the file has the same size and time: it can take
+ * seconds to start there. (Elsewhere it takes a moment, and an apt or Homebrew upgrade may keep
+ * a launcher script's size and time.)
+ */
+export async function find(setting: string, cache?: VersionCache, platform = process.platform): Promise<Code2pdf> {
+  const looked = candidates(setting, os.homedir(), platform);
   for (const command of looked) {
-    const output = await versionOutput(command);
+    const file = cache && platform === "win32" ? windowsProgram(command) : undefined;
+    const now = file ? sizeAndTime(file) : undefined;
+    const seen = file && now ? cache?.get(file) : undefined;
+    const known = seen && now && seen.size === now.size && seen.mtimeMs === now.mtimeMs ? seen.output : undefined;
+    const output = known ?? await versionOutput(command);
     if (output === undefined) {
       continue;
     }
@@ -118,6 +164,9 @@ export async function find(setting: string): Promise<Code2pdf> {
     const found: Code2pdf = { command, ...(parsed ?? { version: "older than 3.7", installKind: "unknown", installDir: "" }) };
     if (!parsed || !isNewEnough(parsed.version)) {
       throw new TooOld(found);
+    }
+    if (file && now && known === undefined) {
+      cache?.set(file, { ...now, output });
     }
     return found;
   }

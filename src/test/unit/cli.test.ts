@@ -76,6 +76,34 @@ test("find: a working code2pdf, an old one, and none", { skip: POSIX_ONLY }, asy
   await assert.rejects(cli.find(path.join(dir, "missing")), (e: unknown) => e instanceof cli.NotInstalled && e.fromSetting);
 });
 
+test("find on Windows: what code2pdf.exe's --version said stands until the file changes", { skip: POSIX_ONLY }, async () => {
+  const dir = tempDir();
+  const runs = path.join(dir, "runs");
+  const said = "code2pdf 3.13 (commit x, 2026-10-20)\n  installed: Windows build, C:\\Users\\a\\AppData\\Local\\Programs\\code2pdf\n";
+  const exe = script(dir, "code2pdf.exe", `echo run >> "${runs}"\ncat <<'EOF'\n${said}EOF`);
+  const seen = new Map<string, cli.SeenVersion>();
+  const cache = { get: (file: string) => seen.get(file), set: (file: string, version: cli.SeenVersion) => void seen.set(file, version) };
+  const asked = () => fs.readFileSync(runs, "utf8").split("\n").filter(Boolean).length;
+  assert.equal((await cli.find(exe, cache, "win32")).installKind, "Windows build");
+  assert.equal((await cli.find(exe, cache, "win32")).version, "3.13");
+  assert.equal(asked(), 1, "asked once");
+  fs.appendFileSync(exe, "\n");  // an update: another size
+  assert.equal((await cli.find(exe, cache, "win32")).version, "3.13");
+  assert.equal(asked(), 2, "a changed file is asked again");
+  await cli.find(exe, cache, "darwin");
+  assert.equal(asked(), 3, "only on Windows");
+  const old = script(dir, "old.exe", `echo run >> "${runs}"; echo "code2pdf 3.11 (commit x, 2026-10-10)"`);
+  await assert.rejects(cli.find(old, cache, "win32"), (e: unknown) => e instanceof cli.TooOld);
+  assert.ok(!seen.has(old), "one too old isn't remembered, so an update is seen");
+});
+
+test("finds code2pdf.exe on Windows' PATH", () => {
+  const exists = (file: string) => file === "C:\\Tools\\code2pdf.exe";
+  assert.equal(cli.windowsProgram("code2pdf", { Path: 'C:\\Windows;"C:\\Tools";' }, exists), "C:\\Tools\\code2pdf.exe");
+  assert.equal(cli.windowsProgram("code2pdf", { PATH: "C:\\Windows" }, exists), undefined);
+  assert.equal(cli.windowsProgram("C:\\x\\code2pdf.exe", {}, exists), "C:\\x\\code2pdf.exe");
+});
+
 test("run: stdin in, stdout and progress out, exit code", { skip: POSIX_ONLY }, async () => {
   const dir = tempDir();
   const fake = script(dir, "fake", [
