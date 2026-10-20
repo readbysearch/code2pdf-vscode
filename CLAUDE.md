@@ -10,13 +10,21 @@ README.md only.
 - `src/extension.ts`: commands, settings, messages; the only file that imports `vscode`.
 - `src/cli.ts`: finds code2pdf (setting, PATH, the installers' folders), checks
   `MIN_VERSION`, runs it with progress and cancellation (SIGINT to its process group, then
-  SIGKILL).
+  SIGKILL). On Windows a program without a console gets no Ctrl-C: `taskkill /T /F` ends
+  code2pdf.exe and its parts workers, and `removeLeftovers` deletes the `.code2pdf-*` files it
+  left next to the PDF.
 - `src/args.ts`: the command line for each kind of print; version 1's settings mapped to options.
 - `src/git.ts`: the choices for Print Changes. A commit in the list means "it and everything
   after it" (`--changed <its parent>`); a typed REV means `--changed REV`.
 - `src/progress.ts`: reads code2pdf's stderr (`[2/3] … (50%)`, `Done: N pages`, `Warning:`,
   `Note:`, `Error:`); `-s` reports on stdout.
-- `src/install.ts`: install and update commands per platform and install kind.
+- `src/install.ts`: install and update commands per platform and install kind. On Windows the
+  "command" is a download (`download: true`), not a terminal.
+- `src/download.ts`: Windows. Downloads `code2pdf-windows-x64.zip` from code2pdf's latest
+  release (its `.sha256` first; `$CODE2PDF_DOWNLOAD_BASE` points elsewhere for tests), unpacks it
+  with Windows' own `tar.exe`, runs `code2pdf.exe --version`, then swaps the folder in:
+  `cli.windowsInstallDir()`, `%LOCALAPPDATA%\Programs\code2pdf`, the same place code2pdf's README
+  tells terminal users to unzip it.
 - `src/telemetry.ts`: anonymous usage events for Azure Application Insights, sent through
   `vscode.env.createTelemetryLogger` (nothing when VS Code's telemetry is off or
   `code2pdf.telemetry` is false, and nothing while `CONNECTION_STRING` is empty). `EVENTS` lists every field that may be sent; the sender drops
@@ -51,6 +59,10 @@ README.md only.
   together. Events are sent only by an installed extension
   (`ExtensionMode.Production`), never under test or while debugging, so the sender is checked
   by unit tests, and against Azure by `test/usage-data.sh` before each release.
+- On Windows, code2pdf is code2pdf's Windows build (`code2pdf.exe`, 3.13 and later). The
+  extension downloads only from code2pdf's GitHub release, checks the published SHA-256 and that
+  it runs before replacing anything, and needs no administrator rights. A Windows build that
+  isn't in `windowsInstallDir()` was unzipped by hand: it's never updated from here.
 - Untrusted workspaces aren't supported: code2pdf runs git, and a repository's git config can
   run programs.
 - No personal data or credentials in commits or their history, anywhere: files, comments, test
@@ -90,13 +102,15 @@ re-creates `code2pdf-vscode`, whose connection string the extension ships.
 `test/fresh-machine.sh` makes a container look like a fresh Ubuntu desktop (wget and python3;
 no curl, git or code2pdf) and runs `src/test/fresh/`: the real install command runs in VS
 Code's terminal (24.04: the .deb; 22.04: install.sh), then Print Now must print. Only the two
-clicks are stubbed. CI's `fresh` job runs it on both, and on a macOS runner (Homebrew, no
-code2pdf).
+clicks are stubbed. CI's `fresh` job runs it on both, on a macOS runner (Homebrew, no
+code2pdf), and on a Windows runner (the Install button downloads the Windows build).
 
 `.vscode-test.mjs` builds the fixture project (a git repo with two commits and an uncommitted
 edit) and points `code2pdf.outputFolder` outside it. Integration tests stub `vscode.window`
 pickers and messages. CI (`.github/workflows/ci.yml`) runs on Ubuntu (the .deb; stable and
-1.90.0) and macOS (Homebrew), and weekly against the latest code2pdf release.
+1.90.0), macOS (Homebrew) and Windows (the Windows build, unzipped as code2pdf's README says),
+and weekly against the latest code2pdf release. Unit tests whose fake programs are shell
+scripts skip on Windows (`POSIX_ONLY`).
 
 ## Releasing
 

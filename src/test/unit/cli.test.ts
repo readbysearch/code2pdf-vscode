@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import * as cli from "../../cli";
-import { script, tempDir } from "./helpers";
+import { POSIX_ONLY, script, tempDir } from "./helpers";
 
 const BREW = `code2pdf 3.12 (commit 2e8b92f, 2026-10-11)
   installed: Homebrew, /opt/homebrew/Cellar/code2pdf/3.12
@@ -38,7 +38,30 @@ test("where code2pdf is looked for", () => {
   assert.ok(usual.includes(path.join("/home/u", ".local", "bin", "code2pdf")));
 });
 
-test("find: a working code2pdf, an old one, and none", async () => {
+test("on Windows: PATH, then where the Install button puts it", () => {
+  const env = { LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" };
+  assert.equal(cli.windowsInstallDir(env, "C:\\Users\\u"), "C:\\Users\\u\\AppData\\Local\\Programs\\code2pdf");
+  assert.equal(cli.windowsInstallDir({}, "C:\\Users\\u"), "C:\\Users\\u\\AppData\\Local\\Programs\\code2pdf");
+  assert.deepEqual(cli.candidates("", "C:\\Users\\u", "win32", env),
+    ["code2pdf", "C:\\Users\\u\\AppData\\Local\\Programs\\code2pdf\\code2pdf.exe"]);
+  assert.deepEqual(cli.candidates("D:\\tools\\code2pdf.exe", "C:\\Users\\u", "win32", env), ["D:\\tools\\code2pdf.exe"]);
+});
+
+test("after a stop: the temporary files code2pdf left are removed, older ones kept", () => {
+  const dir = tempDir();
+  fs.writeFileSync(path.join(dir, ".code2pdf-old.pdf"), "");
+  fs.utimesSync(path.join(dir, ".code2pdf-old.pdf"), new Date(2020, 0, 1), new Date(2020, 0, 1));
+  const since = Date.now();
+  fs.writeFileSync(path.join(dir, ".code2pdf-a1b2.pdf"), "");
+  fs.mkdirSync(path.join(dir, ".code2pdf-parts-x9"));
+  fs.writeFileSync(path.join(dir, ".code2pdf-parts-x9", "part-1.pdf"), "");
+  fs.writeFileSync(path.join(dir, "report.pdf"), "");
+  assert.deepEqual(cli.removeLeftovers(dir, since).sort(), [".code2pdf-a1b2.pdf", ".code2pdf-parts-x9"]);
+  assert.deepEqual(fs.readdirSync(dir).sort(), [".code2pdf-old.pdf", "report.pdf"]);
+  assert.deepEqual(cli.removeLeftovers(path.join(dir, "missing"), since), []);
+});
+
+test("find: a working code2pdf, an old one, and none", { skip: POSIX_ONLY }, async () => {
   const dir = tempDir();
   const good = script(dir, "good", `cat <<'EOF'\n${BREW}EOF`);
   assert.equal((await cli.find(good)).version, "3.12");
@@ -53,7 +76,7 @@ test("find: a working code2pdf, an old one, and none", async () => {
   await assert.rejects(cli.find(path.join(dir, "missing")), (e: unknown) => e instanceof cli.NotInstalled && e.fromSetting);
 });
 
-test("run: stdin in, stdout and progress out, exit code", async () => {
+test("run: stdin in, stdout and progress out, exit code", { skip: POSIX_ONLY }, async () => {
   const dir = tempDir();
   const fake = script(dir, "fake", [
     `echo "code2pdf: 2 files, 40 lines (~2 pages)" >&2`,
@@ -81,7 +104,7 @@ function cancelAfter(ms: number): cli.Cancellation {
   return token;
 }
 
-test("cancel sends Ctrl-C to code2pdf and the processes it started", async () => {
+test("cancel sends Ctrl-C to code2pdf and the processes it started", { skip: POSIX_ONLY }, async () => {
   const dir = tempDir();
   const marker = path.join(dir, "child-stopped");
   // Like bin/code2pdf: a shell script whose child does the work and cleans up on SIGINT
@@ -94,11 +117,25 @@ test("cancel sends Ctrl-C to code2pdf and the processes it started", async () =>
   assert.ok(Date.now() - started < 5000, "stopped without waiting for the kill");
 });
 
-test("cancel kills code2pdf if Ctrl-C doesn't stop it", async () => {
+test("cancel kills code2pdf if Ctrl-C doesn't stop it", { skip: POSIX_ONLY }, async () => {
   const dir = tempDir();
   const stubborn = script(dir, "stubborn", `trap '' INT\nwhile :; do sleep 0.1; done`);
   const result = await cli.run(stubborn, { cwd: dir, args: [], cancellation: cancelAfter(200), graceMs: 300 });
   assert.equal(result.cancelled, true);
+});
+
+test("on Windows, cancel ends code2pdf and the processes it started", { skip: process.platform !== "win32" && "Windows only" }, async () => {
+  const dir = tempDir();
+  const ticks = path.join(dir, "ticks");
+  // Like parts mode: the worker is a process of its own, and keeps writing until it's stopped
+  const worker = `setInterval(() => require("fs").appendFileSync(${JSON.stringify(ticks)}, "."), 50)`;
+  const parent = `require("child_process").spawn(process.execPath, ["-e", ${JSON.stringify(worker)}], { stdio: "inherit" }); setInterval(() => {}, 1000)`;
+  const result = await cli.run(process.execPath, { cwd: dir, args: ["-e", parent], cancellation: cancelAfter(1500) });
+  assert.equal(result.cancelled, true);
+  await new Promise((r) => setTimeout(r, 1000));
+  const after = fs.statSync(ticks).size;
+  await new Promise((r) => setTimeout(r, 1000));
+  assert.equal(fs.statSync(ticks).size, after, "the worker stopped too");
 });
 
 test("run rejects when the command doesn't exist", async () => {

@@ -1,7 +1,7 @@
 # Privacy
 
 This policy covers the code2pdf extension for VS Code (`readbysearch.code2pdf`), published by
-readbysearch. Last changed on 19 October 2026, for version 2.0.1.
+readbysearch. Last changed on 20 October 2026, for version 2.1.0.
 
 ## In short
 
@@ -17,10 +17,10 @@ readbysearch. Last changed on 19 October 2026, for version 2.0.1.
 - **When the extension starts:** whether code2pdf was found, its version and how it was installed
   (Homebrew, Debian package and so on), whether Homebrew is installed, on Linux the distribution
   and its version, and whether this is the extension's first start on this computer.
-- **When it offers to install or update code2pdf:** why (missing, too old, or Windows), whether a
+- **When it offers to install or update code2pdf:** why (missing, too old, or not where a setting says), whether a
   print or the Get Started page led to it, the buttons it showed, and the one you chose.
-- **When an install it started is done,** or after 30 minutes without one: which install, and how
-  long it took.
+- **When an install it started is done,** fails or is cancelled, or after 30 minutes without
+  one: which install, and how long it took.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or changes),
   whether it printed, failed, was cancelled or its save dialog was closed, the number of pages
   and warnings, how long it took, code2pdf's exit code if it failed, and two settings: whether
@@ -89,7 +89,8 @@ when you choose them:
 
 - **Installing or updating code2pdf from the extension** runs Homebrew, apt or code2pdf's install
   script in a terminal. They download from GitHub, Homebrew, the Python Package Index or
-  conda-forge, under those services' own policies. Homebrew counts installs in its own anonymous
+  conda-forge, under those services' own policies. On Windows, the extension downloads
+  code2pdf's Windows build from GitHub itself. Homebrew counts installs in its own anonymous
   analytics, which `brew analytics off` turns off.
 - **Links in the extension's messages,** such as brew.sh or the installation guide, open in your
   browser.

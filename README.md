@@ -8,25 +8,28 @@ lines marked in the margin.
 ![Opening the Command Palette, typing "code2pdf: Print All Source Files to PDF" and pressing Enter: a progress notification counts the pages, then the 46-page PDF opens on its contents page, and clicking extension.ts there jumps to its code](images/demo-hero.gif)
 
 The extension runs the [code2pdf](https://github.com/readbysearch/code2pdf) command-line tool,
-on macOS and Linux. Your code stays on your machine. Anonymous [usage data](#usage-data) is sent
+on macOS, Linux and Windows. Your code stays on your machine. Anonymous [usage data](#usage-data) is sent
 only when VS Code's telemetry is on, and `code2pdf.telemetry` turns it off for this extension
 alone.
 
 ## Install code2pdf first
 
-The extension prints with the code2pdf command-line tool, version 3.12 or later, on macOS and
-Linux. There are two ways to install it.
+The extension prints with the code2pdf command-line tool, version 3.12 or later. There are two
+ways to install it.
 
 **From VS Code.** Click Install on the extension's Get Started page, which opens when you install
 the extension, or run **code2pdf: Install the Command-Line Tool** from the Command Palette. If you
 print before installing it, the extension offers the same button. It picks the installer for your
 machine and runs it in a terminal, where you see what it does and answer its questions: Homebrew
-asks you to confirm, apt asks for your password. When code2pdf is ready, VS Code says so, with
-**Print Now** if you were printing.
+asks you to confirm, apt asks for your password. On Windows there's no terminal: it downloads
+code2pdf for Windows (about 40 MB) from its GitHub release into
+`%LOCALAPPDATA%\Programs\code2pdf`, checks it against its published SHA-256, and needs no
+administrator rights. When code2pdf is ready, VS Code says so, with **Print Now** if you were
+printing.
 
 **By hand,** in a terminal. On macOS, Homebrew needs no sudo. On Linux, install code2pdf for
 everyone on the machine, which needs sudo, or just for yourself, which doesn't (also the way to go
-where you can't use sudo, such as a shared server).
+where you can't use sudo, such as a shared server). On Windows, no administrator rights are needed.
 
 - macOS, or Linux with Homebrew:
 
@@ -54,12 +57,21 @@ where you can't use sudo, such as a shared server).
   wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --user
   ```
 
+- Windows, in PowerShell: unzip code2pdf for Windows into `%LOCALAPPDATA%\Programs`, where the
+  extension looks for it. [code2pdf's README](https://github.com/readbysearch/code2pdf#windows)
+  says how to add it to PATH as well, for using it in a terminal.
+
+  ```powershell
+  Invoke-WebRequest https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf-windows-x64.zip -OutFile "$env:TEMP\code2pdf.zip"
+  Expand-Archive "$env:TEMP\code2pdf.zip" "$env:LOCALAPPDATA\Programs" -Force
+  ```
+
 If you have curl rather than wget, use `curl -LO URL` to download a file and `curl -sSL URL` to
 print it. A fresh Ubuntu desktop has only wget.
 
-On Windows, use [WSL](https://code.visualstudio.com/docs/remote/wsl): open your folder in WSL,
-install code2pdf there, and print from that window. Over Remote SSH, code2pdf runs on the remote
-machine.
+In a [WSL](https://code.visualstudio.com/docs/remote/wsl) window, and over Remote SSH, code2pdf
+runs on that machine: install it there, as on Linux. Print Changes uses git; on Windows that's
+[Git for Windows](https://git-scm.com/download/win).
 
 ## Printing
 
@@ -169,7 +181,8 @@ settings can't turn it back on.
   Homebrew is installed, and on Linux the distribution and its version.
 - **When it offers to install or update code2pdf:** why, the buttons it showed, and the one you
   chose.
-- **When an install it started is done**, or after 30 minutes without one: how long it took.
+- **When an install it started is done**, fails or is cancelled, or after 30 minutes without
+  one: how long it took.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or
   changes), whether it printed, failed or was cancelled, the pages, how long it took, and
   whether the PDF's place came from the save dialog or the `code2pdf.outputFolder` setting.

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import * as args from "./args";
 import * as cli from "./cli";
+import * as download from "./download";
 import * as git from "./git";
 import { INSTALL_GUIDE, type InstallCommand, installCommands, parseOsRelease, updateCommand } from "./install";
 import { type OutputReader, withElapsed } from "./progress";
@@ -229,16 +230,6 @@ async function code2pdf(from: OfferedFrom = "print"): Promise<cli.Code2pdf | und
   if (found) {
     return found;
   }
-  if (process.platform === "win32") {
-    const choice = await vscode.window.showWarningMessage(
-      "code2pdf runs on macOS and Linux. On Windows, open your folder in WSL (the WSL extension), install code2pdf there, and print from that window.",
-      "About WSL");
-    record("installOffered", { reason: "windows", from, offered: "About WSL", choice: choice ?? "dismissed" });
-    if (choice) {
-      void vscode.env.openExternal(vscode.Uri.parse("https://code.visualstudio.com/docs/remote/wsl"));
-    }
-    return undefined;
-  }
   try {
     const result = await lookUp();
     log.appendLine(`Using ${result.command}: code2pdf ${result.version} (${result.installKind})`);
@@ -301,15 +292,18 @@ function distro(): string | undefined {
 /** The install (or update) command for this machine, and what to say about it. */
 function howToInstall(old?: cli.Code2pdf): { installs: InstallCommand[]; message: string } {
   if (old) {
-    const update = updateCommand(old, os.homedir());
+    const update = updateCommand(old, os.homedir(), cli.windowsInstallDir());
     return {
       installs: update ? [update] : [],
       message: `This extension needs code2pdf ${cli.MIN_VERSION.join(".")} or later, and ${old.command} is ${old.version}.` +
-        (update ? ` It updates ${update.how}, in a terminal.` : ""),
+        (update?.download ? ` ${update.label} ${update.how}.` : update ? ` It updates ${update.how}, in a terminal.` : ""),
     };
   }
   const installs = installCommands(process.platform, hasBrew(), osRelease());
   const intro = fromVersion1 ? upgrade.INSTALL_INTRO : "This extension prints with the code2pdf command-line tool, which isn't installed.";
+  if (installs[0]?.download) {
+    return { installs, message: `${intro} ${installs[0].label} ${installs[0].how}.` };
+  }
   if (installs.length) {
     return { installs, message: `${intro} It installs ${installs.map((i) => i.how).join(" or ")}, in a terminal.` };
   }
@@ -354,7 +348,11 @@ async function offer({ installs, message }: ReturnType<typeof howToInstall>, rea
   const install = installs.find((i) => i.label === choice);
   if (install) {
     installing = { command: install.label, started: Date.now() };
-    runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command, install.asks);
+    if (install.download) {
+      await downloadWindowsBuild(install.label);
+    } else {
+      runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command ?? "", install.asks);
+    }
   } else if (choice === "Open brew.sh") {
     void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));
   } else if (choice === "Installation Guide") {
@@ -364,10 +362,6 @@ async function offer({ installs, message }: ReturnType<typeof howToInstall>, rea
 
 /** The Install command (and the walkthrough's button): install, update, or say it's ready. */
 async function installOrCheck(): Promise<undefined> {
-  if (process.platform === "win32") {
-    await code2pdf("installCommand");  // explains WSL
-    return undefined;
-  }
   try {
     const ready = await lookUp();
     await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
@@ -382,6 +376,65 @@ async function installOrCheck(): Promise<undefined> {
     }
   }
   return undefined;
+}
+
+/** Windows: downloads the Windows build (download.ts), with a cancellable progress message. */
+async function downloadWindowsBuild(label: string): Promise<void> {
+  const dir = cli.windowsInstallDir();
+  log.appendLine(`\n${label}: the Windows build, into ${dir}`);
+  const mb = (bytes: number) => (bytes / 1e6).toFixed(0);
+  try {
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `${label}`, cancellable: true },
+      (progress, token) => {
+        let shown = 0;
+        return download.installWindowsBuild(dir, {
+          cancellation: token,
+          log: (line) => log.appendLine(line),
+          onProgress: (received, total) => {
+            const done = total ? (received / total) * 100 : 0;
+            progress.report({ message: total ? `${mb(received)} of ${mb(total)} MB` : `${mb(received)} MB`, increment: done - shown });
+            shown = done;
+          },
+        });
+      });
+  } catch (error) {
+    if (error instanceof download.Cancelled) {
+      log.appendLine("Stopped; nothing was changed.");
+      installFinished({ outcome: "cancelled" });
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    log.appendLine(`Error: ${message}`);
+    installFinished({ outcome: "failed" });
+    const choice = await show("error", `code2pdf couldn't be installed: ${message}.`, "Show Output", "Installation Guide");
+    if (choice === "Show Output") {
+      log.show(true);
+    } else if (choice === "Installation Guide") {
+      void vscode.env.openExternal(vscode.Uri.parse(INSTALL_GUIDE));
+    }
+    return;
+  }
+  found = undefined;
+  try {
+    await ready(await lookUp());
+  } catch (error) {
+    // Installed, but not found where it was put, or still too old: say so the usual way
+    installFinished({ outcome: "failed" });
+    throw error;
+  }
+}
+
+/** code2pdf is ready after an install: say so, and offer to run the print that needed it. */
+async function ready(found: cli.Code2pdf): Promise<void> {
+  installFinished({ outcome: "ready", cliVersion: found.version, installKind: found.installKind });
+  log.appendLine(`code2pdf is ready: ${found.command}, ${found.version} (${found.installKind})`);
+  await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
+  const retry = lastPrint;
+  const choice = await show("info", `code2pdf ${found.version} is installed.` + (retry ? "" : " Right-click a folder or file and choose Print to PDF."),
+    ...(retry ? ["Print Now"] : []));
+  if (choice === "Print Now" && retry) {
+    void vscode.commands.executeCommand(retry.id, ...retry.args);
+  }
 }
 
 function runInTerminal(name: string, command: string, asks?: string): void {
@@ -414,20 +467,12 @@ function watchForInstall(intervalMs = 3000): void {
     }
     checking = true;
     try {
-      const ready = await lookUp();
+      const installed = await lookUp();
       if (!installWatch) {
         return;
       }
       stopInstallWatch();
-      installFinished({ outcome: "ready", cliVersion: ready.version, installKind: ready.installKind });
-      log.appendLine(`code2pdf is ready: ${ready.command}, ${ready.version} (${ready.installKind})`);
-      await vscode.commands.executeCommand("setContext", "code2pdf.installed", true);
-      const retry = lastPrint;
-      const choice = await show("info", `code2pdf ${ready.version} is installed.` + (retry ? "" : " Right-click a folder or file and choose Print to PDF."),
-        ...(retry ? ["Print Now"] : []));
-      if (choice === "Print Now" && retry) {
-        void vscode.commands.executeCommand(retry.id, ...retry.args);
-      }
+      await ready(installed);
     } catch {
       // Not there yet (or still too old): look again
     } finally {
@@ -711,7 +756,12 @@ async function printChanges(target?: ChangesTarget): Promise<string | undefined>
   } else {
     folder = (await pickWorkspaceFolder("Print changes in which folder?")).fsPath;
   }
-  if (!(await git.repositoryRoot(folder))) {
+  if (!(await git.repositoryRoot(folder).catch((error: unknown) => {
+    if (error instanceof git.GitError) {
+      throw new Stop(`Print Changes uses git, which isn't installed${process.platform === "win32" ? ": install Git for Windows from git-scm.com, then try again" : ""}.`, "warning");
+    }
+    throw error;
+  }))) {
     throw new Stop(`${path.basename(folder)} isn't in a git repository, so there are no changes to print.`, "warning");
   }
   if (!(await code2pdf())) {
@@ -827,7 +877,8 @@ async function execute(job: Job): Promise<string | undefined> {
     });
   if (result.cancelled) {
     ended("cancelled");
-    log.appendLine("Stopped.");
+    const removed = process.platform === "win32" ? cli.removeLeftovers(path.dirname(job.output), begun) : [];
+    log.appendLine(`Stopped.${removed.length ? ` Removed what it left: ${removed.join(", ")}` : ""}`);
     vscode.window.setStatusBarMessage("code2pdf: stopped; nothing was written", 5000);
     return undefined;
   }

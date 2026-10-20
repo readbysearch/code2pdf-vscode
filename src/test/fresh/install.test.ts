@@ -1,6 +1,6 @@
 // A user's first print on a machine without code2pdf, for real: the extension offers to install
-// it, the install command runs in VS Code's terminal, and Print Now prints once it's ready.
-// Only the two clicks are simulated. Run on a machine (or container) without code2pdf:
+// it, the install command runs in VS Code's terminal (on Windows: the download), and Print Now
+// prints once it's ready. Only the two clicks are simulated. Run on a machine (or container) without code2pdf:
 //   CODE2PDF_TEST_FILES='out/test/fresh/*.test.js' npx vscode-test
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
@@ -68,7 +68,7 @@ function watchTerminals(): { failed: () => string | undefined; started: () => bo
 
 function onPath(command: string): boolean {
   try {
-    execFileSync("sh", ["-c", `command -v ${command}`], { stdio: "ignore" });
+    execFileSync(process.platform === "win32" ? "where" : "sh", process.platform === "win32" ? [command] : ["-c", `command -v ${command}`], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -78,7 +78,9 @@ function onPath(command: string): boolean {
 describe("first print without code2pdf (fresh machine)", () => {
   it("offers the install, runs it in the terminal, then prints", async function () {
     this.timeout(12 * 60_000);
-    assert.ok(!onPath("code2pdf") && !fs.existsSync("/opt/homebrew/bin/code2pdf"), "this machine must not have code2pdf yet");
+    const windowsBuild = path.join(process.env.LOCALAPPDATA ?? "", "Programs", "code2pdf", "code2pdf.exe");
+    assert.ok(!onPath("code2pdf") && !fs.existsSync("/opt/homebrew/bin/code2pdf") && !(process.platform === "win32" && fs.existsSync(windowsBuild)),
+      "this machine must not have code2pdf yet");
     await vscode.extensions.getExtension("readbysearch.code2pdf")?.activate();
     const project = (vscode.workspace.workspaceFolders ?? [])[0].uri.fsPath;
     const pdf = path.join(process.env.CODE2PDF_TEST_PDFS ?? "", "util.pdf");
@@ -106,13 +108,13 @@ describe("first print without code2pdf (fresh machine)", () => {
       assert.match(warnings[0]?.message ?? "", /isn't installed/);
       const want = process.env.CODE2PDF_TEST_CLICK;
       assert.ok(!want || warnings[0].buttons.some((b) => b.startsWith(want)), `no "${want}" button: ${warnings[0].buttons.join(", ")}`);
-      console.log(`Clicked "${want ? warnings[0].buttons.find((b) => b.startsWith(want)) : warnings[0].buttons[0]}"; waiting for the terminal to install code2pdf…`);
+      console.log(`Clicked "${want ? warnings[0].buttons.find((b) => b.startsWith(want)) : warnings[0].buttons[0]}"; waiting for code2pdf to be installed…`);
       const started = Date.now();
       let lastReport = started;
       // A good install takes 1-3 minutes (Homebrew on a CI runner: ~2)
       while (!fs.existsSync(pdf) && !terminals.failed() && Date.now() - started < 10 * 60_000) {
         await new Promise((r) => setTimeout(r, 2000));
-        assert.ok(terminals.started() !== false || Date.now() - started < 2 * 60_000,
+        assert.ok(process.platform === "win32" || terminals.started() !== false || Date.now() - started < 2 * 60_000,
           "after 2 minutes, nothing has run in the terminal");
         if (Date.now() - lastReport > 60_000) {
           lastReport = Date.now();

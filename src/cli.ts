@@ -1,6 +1,7 @@
 // Finding the code2pdf command, checking its version, and running it. No vscode imports.
 
 import { execFile, spawn } from "node:child_process";
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { OutputReader, ProgressUpdate } from "./progress";
@@ -62,15 +63,23 @@ export function isNewEnough(version: string, min: readonly [number, number] = MI
 }
 
 /**
+ * Where the Windows build goes: the Install button puts it here, and the README's PowerShell
+ * lines too, so the extension and a terminal share one copy. No administrator rights needed.
+ */
+export function windowsInstallDir(env: NodeJS.ProcessEnv = process.env, home = os.homedir()): string {
+  return path.win32.join(env.LOCALAPPDATA || path.win32.join(home, "AppData", "Local"), "Programs", "code2pdf");
+}
+
+/**
  * Where to look for code2pdf: the setting if there is one; otherwise PATH, then the folders the
  * installers use, for when VS Code was started without the login shell's PATH.
  */
-export function candidates(setting: string, home = os.homedir(), platform = process.platform): string[] {
+export function candidates(setting: string, home = os.homedir(), platform = process.platform, env = process.env): string[] {
   if (setting.trim()) {
     return [expandHome(setting.trim(), home)];
   }
   if (platform === "win32") {
-    return ["code2pdf"];
+    return ["code2pdf", path.win32.join(windowsInstallDir(env, home), "code2pdf.exe")];
   }
   return [
     "code2pdf",
@@ -146,7 +155,9 @@ export interface RunResult {
 /**
  * Runs code2pdf. Cancelling sends Ctrl-C (SIGINT) to its whole process group, as a terminal
  * would, so code2pdf stops cleanly and removes its temporary files; it is killed if it hasn't
- * stopped after a few seconds.
+ * stopped after a few seconds. Windows has no Ctrl-C for a program without a console, so there
+ * it is ended at once with the processes it started (parts mode's), and its temporary files are
+ * left for removeLeftovers.
  */
 export function run(command: string, options: RunOptions): Promise<RunResult> {
   return new Promise((resolve, reject) => {
@@ -156,6 +167,7 @@ export function run(command: string, options: RunOptions): Promise<RunResult> {
       cwd: options.cwd,
       detached: ownGroup,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
     let stdout = "";
     let cancelled = false;
@@ -163,7 +175,9 @@ export function run(command: string, options: RunOptions): Promise<RunResult> {
 
     const signal = (name: NodeJS.Signals) => {
       try {
-        if (ownGroup && child.pid) {
+        if (process.platform === "win32" && child.pid) {
+          execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => {});
+        } else if (ownGroup && child.pid) {
           process.kill(-child.pid, name);
         } else {
           child.kill(name);
@@ -209,4 +223,31 @@ export function run(command: string, options: RunOptions): Promise<RunResult> {
 
     child.stdin.end(options.input ?? "");
   });
+}
+
+/**
+ * Removes the temporary files a stopped code2pdf left in FOLDER (.code2pdf-*.pdf and the
+ * .code2pdf-parts-* folders, next to the PDF it was writing) that are from SINCE or later.
+ * Returns their names.
+ */
+export function removeLeftovers(folder: string, since: number): string[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(folder);
+  } catch {
+    return [];
+  }
+  const removed: string[] = [];
+  for (const name of names.filter((n) => n.startsWith(".code2pdf-"))) {
+    const file = path.join(folder, name);
+    try {
+      if (fs.statSync(file).mtimeMs >= since - 2000) {  // FAT and network drives keep 2-second times
+        fs.rmSync(file, { recursive: true, force: true });
+        removed.push(name);
+      }
+    } catch {
+      // Gone already, or still in use
+    }
+  }
+  return removed;
 }

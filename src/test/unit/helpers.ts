@@ -13,6 +13,9 @@ export function installed(): boolean {
   }
 }
 
+/** For node:test's skip: the tests whose fake programs are shell scripts can't run on Windows. */
+export const POSIX_ONLY = process.platform === "win32" && "its fake programs are shell scripts";
+
 export function tempDir(prefix = "code2pdf-vscode-"): string {
   return fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), prefix));
 }

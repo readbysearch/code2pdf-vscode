@@ -261,7 +261,7 @@
           {
             "id": "install",
             "title": "Install the code2pdf tool",
-            "description": "This extension prints with the code2pdf command-line tool, on macOS and Linux (on Windows, in WSL). Install it once.\n[Install code2pdf](command:code2pdf.install)",
+            "description": "This extension prints with the code2pdf command-line tool, on macOS, Linux and Windows. Install it once.\n[Install code2pdf](command:code2pdf.install)",
             "media": {
               "markdown": "media/install.md"
             },

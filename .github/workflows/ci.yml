@@ -22,6 +22,7 @@ jobs:
           - { os: ubuntu-24.04, vscode: stable }
           - { os: ubuntu-24.04, vscode: 1.90.0 }   # the oldest in package.json's engines
           - { os: macos-latest, vscode: stable }
+          - { os: windows-latest, vscode: stable }
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }}, VS Code ${{ matrix.vscode }}
     steps:
@@ -39,6 +40,14 @@ jobs:
       - name: Install code2pdf (Homebrew)
         if: runner.os == 'macOS'
         run: brew install readbysearch/tap/code2pdf poppler
+      - name: Install code2pdf (Windows build, as the README says), and pdftotext from MSYS2
+        if: runner.os == 'Windows'
+        run: |
+          Invoke-WebRequest https://github.com/readbysearch/code2pdf/releases/latest/download/code2pdf-windows-x64.zip -OutFile "$env:TEMP\code2pdf.zip"
+          Expand-Archive "$env:TEMP\code2pdf.zip" "$env:LOCALAPPDATA\Programs" -Force
+          echo "$env:LOCALAPPDATA\Programs\code2pdf" | Out-File -FilePath $env:GITHUB_PATH -Append
+          C:\msys64\usr\bin\bash -lc 'pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-poppler'
+          echo "C:\msys64\ucrt64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
       - run: code2pdf --version
       - run: npm ci
       - run: npm run lint

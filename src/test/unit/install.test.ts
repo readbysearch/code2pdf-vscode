@@ -27,12 +27,13 @@ test("install: Homebrew where there is one, else the .deb, else install.sh witho
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.command ?? "", /sudo apt install \/tmp\/code2pdf_all\.deb'$/);
   assert.match(installCommand("linux", false, { id: "ubuntu", versionId: "22.04" })?.command ?? "", /\| bash -s -- --user'$/);
   assert.match(installCommand("linux", false)?.command ?? "", /--user'$/);
-  assert.equal(installCommand("win32", false), undefined);
+  assert.equal(installCommand("win32", false)?.download, true, "Windows: the extension downloads the Windows build itself");
+  assert.equal(installCommand("win32", false)?.command, undefined, "no terminal");
   const labels = (...a: Parameters<typeof installCommands>) => installCommands(...a).map((i) => i.label);
   assert.deepEqual(labels("linux", false, parseOsRelease(UBUNTU_24)), ["Install with apt (sudo)", "Install for Me (no sudo)"],
     "where you can't use sudo (a shared server), the no-sudo install is offered too");
   assert.deepEqual(labels("linux", false, { id: "fedora", versionId: "41" }), ["Install for Me (no sudo)", "Install for All Users (sudo)"]);
-  assert.match(installCommands("linux", false)[1].command, /bash -s -- --system'$/);
+  assert.match(installCommands("linux", false)[1].command ?? "", /bash -s -- --system'$/);
   assert.deepEqual(labels("darwin", true), ["Install with Homebrew"]);
   assert.match(installCommand("darwin", true)?.asks ?? "", /type y in the terminal/, "Homebrew 7 asks before installing");
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.asks ?? "", /password/);
@@ -45,6 +46,10 @@ test("update the way it was installed", () => {
   assert.match(updateCommand(found("install.sh", "/home/u/.local/share/code2pdf"), "/home/u")?.command ?? "", /--user'$/);
   assert.match(updateCommand(found("install.sh (conda-forge environment)", "/usr/local/share/code2pdf"), "/home/u")?.command ?? "", /--system'$/);
   assert.equal(updateCommand(found("git checkout"), "/home/u"), undefined);
+  const windows = "C:\\Users\\u\\AppData\\Local\\Programs\\code2pdf";
+  assert.equal(updateCommand(found("Windows build", `${windows}\\_internal`), "C:\\Users\\u", windows)?.label, "Update code2pdf");
+  assert.equal(updateCommand(found("Windows build", "D:\\tools\\code2pdf\\_internal"), "C:\\Users\\u", windows), undefined,
+    "one unzipped by hand elsewhere is updated by hand (the Install button's copy would come after it)");
 });
 
 test("the download works with curl or wget, in any shell", { skip: process.platform === "win32" }, async () => {

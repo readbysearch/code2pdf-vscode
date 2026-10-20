@@ -20,6 +20,7 @@ jobs:
       matrix:
         include:
           - { name: "macOS, Homebrew", os: macos-latest }
+          - { name: "Windows, download", os: windows-latest }
           - { name: "Ubuntu 24.04, apt (sudo)", os: ubuntu-latest, image: "ubuntu:24.04", click: "Install with apt" }
           - { name: "Ubuntu 24.04, for me (no sudo)", os: ubuntu-latest, image: "ubuntu:24.04", click: "Install for Me" }
           - { name: "Ubuntu 22.04, for me (no sudo)", os: ubuntu-latest, image: "ubuntu:22.04", click: "Install for Me" }
@@ -33,7 +34,7 @@ jobs:
         if: matrix.image
         run: docker run --rm -e CODE2PDF_TEST_CLICK="${{ matrix.click }}" -v "$PWD:/src:ro" ${{ matrix.image }} bash /src/test/fresh-machine.sh
       - uses: actions/setup-node@v4
-        if: runner.os == 'macOS'
+        if: runner.os != 'Linux'
         with:
           node-version: 22
       - name: The runner has Homebrew but not code2pdf
@@ -45,3 +46,12 @@ jobs:
           CODE2PDF_TEST_FILES='out/test/fresh/*.test.js' npx vscode-test || {
             echo "== Homebrew after the test"; brew list --versions code2pdf || true; ls -la /opt/homebrew/bin/code2pdf || true
             ls -lt ~/Library/Logs/Homebrew 2>/dev/null | head; exit 1; }
+      - name: The runner has no code2pdf; the Install button downloads it
+        if: runner.os == 'Windows'
+        run: |
+          C:\msys64\usr\bin\bash -lc 'pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-poppler'
+          $env:PATH = "$env:PATH;C:\msys64\ucrt64\bin"
+          npm ci
+          npx tsc -p .
+          $env:CODE2PDF_TEST_FILES = 'out/test/fresh/*.test.js'
+          npx vscode-test

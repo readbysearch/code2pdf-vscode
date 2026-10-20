@@ -12,7 +12,8 @@ installs it in a terminal, where you see the command and can answer its prompts:
 On Linux the button offers both. Choose "just for you" where you can't use sudo, such as a
 shared server.
 
-On Windows, open your folder in WSL and install code2pdf there.
+On Windows, the button downloads code2pdf for Windows (about 40 MB) from its GitHub release and
+checks it: no terminal, and no administrator rights.
 
 When the install finishes, this step is checked off and VS Code says so.
 

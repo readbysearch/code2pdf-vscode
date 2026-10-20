@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0
+
+- Windows: code2pdf runs on Windows itself, with no WSL (code2pdf 3.13 has a Windows build).
+  Install downloads it from its GitHub release (about 40 MB) into
+  `%LOCALAPPDATA%\Programs\code2pdf`, checks it against its published SHA-256, and needs no
+  terminal or administrator rights; Update does the same. Cancelling a print stops code2pdf and
+  the processes it started, and removes the temporary files it left.
+- Print Changes says when git isn't installed (on Windows, it needs Git for Windows).
+
 ## 2.0.1
 
 - Anonymous usage data, only when VS Code's telemetry is on: whether code2pdf was found, which

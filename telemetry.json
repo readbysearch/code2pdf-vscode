@@ -21,15 +21,15 @@
     "readbysearch.code2pdf/installOffered": {
       "owner": "readbysearch",
       "comment": "The message offering to install or update code2pdf was answered or closed.",
-      "reason": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "missing, tooOld, notAtSetting, or windows (code2pdf needs WSL there)." },
+      "reason": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "missing, tooOld, or notAtSetting (the executable setting points nowhere)." },
       "from": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "print (a print command) or installCommand (the Install command or the Get Started page)." },
       "offered": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The buttons shown." },
       "choice": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The button chosen, or dismissed." }
     },
     "readbysearch.code2pdf/installFinished": {
       "owner": "readbysearch",
-      "comment": "An install started from the message finished, or 30 minutes passed without code2pdf appearing.",
-      "outcome": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "ready or gaveUp." },
+      "comment": "An install started from the message finished, failed or was cancelled, or 30 minutes passed without code2pdf appearing.",
+      "outcome": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "ready, gaveUp (a terminal install, after 30 minutes), or failed or cancelled (the download on Windows)." },
       "command": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The install button chosen, such as Install with Homebrew." },
       "seconds": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "Time since the button was chosen.", "isMeasurement": true },
       "cliVersion": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The installed code2pdf's version." },
