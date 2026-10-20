@@ -82,8 +82,8 @@ test("remembers the latest PDFs made, each once", () => {
 });
 
 test("says ~/Desktop rather than the whole path", () => {
-  assert.equal(save.tilde(path.join("/home/a", "Desktop"), "/home/a"), "~/Desktop");
-  assert.equal(save.tilde(path.join("/home/a", "OneDrive", "Desktop"), "/home/a"), "~/OneDrive/Desktop", "/ on Windows too");
+  assert.equal(save.tilde("/home/a/Desktop", "/home/a", "linux"), "~/Desktop");
+  assert.equal(save.tilde("C:\\Users\\a\\Desktop", "C:\\Users\\a", "win32"), "C:\\Users\\a\\Desktop", "Windows doesn't write ~");
   assert.equal(save.tilde("/elsewhere", "/home/a"), "/elsewhere");
   assert.equal(save.tilde("/home/a", "/home/a"), "/home/a");
 });

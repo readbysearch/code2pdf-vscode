@@ -154,8 +154,8 @@ export function remember(made: Record<string, string>, file: string, source: str
   return Object.fromEntries([...kept, [file, source] as [string, string]].slice(-limit));
 }
 
-/** "~/Desktop" rather than the full path, for messages and settings (with / on Windows too, which expandHome reads). */
-export function tilde(dir: string, home = os.homedir()): string {
+/** "~/Desktop" rather than the full path, for messages and settings; on Windows, which doesn't write "~", the full path. */
+export function tilde(dir: string, home = os.homedir(), platform = process.platform): string {
   const relative = path.relative(home, dir);
-  return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? `~/${relative.split(path.sep).join("/")}` : dir;
+  return platform !== "win32" && relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? `~/${relative}` : dir;
 }
