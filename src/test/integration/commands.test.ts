@@ -537,6 +537,40 @@ describe("code2pdf", () => {
     assert.ok(reports.some((r) => r.startsWith("FAKE-CODE2PDF")), `printed with the code2pdf the setting names now: ${reports.join(" | ")}`);
   });
 
+  it("a print while code2pdf is being looked for waits for that lookup, and says so", async () => {
+    // As on a slow PC, where code2pdf.exe takes seconds to start: a print just after activation
+    // (whose own lookup is still running) mustn't start it a second time, or wait in silence
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cliModule = require("../../cli") as { find: (setting: string) => Promise<{ command: string }> };
+    const realFind = cliModule.find;
+    const command = (await realFind("")).command;
+    let lookups = 0;
+    cliModule.find = async (setting: string) => {
+      lookups++;
+      await new Promise((r) => setTimeout(r, 1500));
+      return realFind(setting);
+    };
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    const titles: string[] = [];
+    try {
+      await config.update("executable", command, vscode.ConfigurationTarget.Global);  // forgets code2pdf and looks again
+      for (let i = 0; i < 50 && !lookups; i++) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      assert.equal(lookups, 1, "the setting's change started a lookup");
+      const pdf = await messages(() => stubbed("withProgress", (options: { title?: string }, task: (p: unknown, t: unknown) => Thenable<unknown>) => {
+        titles.push(options.title ?? "");
+        return task({ report: () => undefined }, { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) });
+      }, () => vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py"))));
+      assert.ok(pdf, "printed");
+    } finally {
+      cliModule.find = realFind;
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+    }
+    assert.equal(lookups, 1, "the print waited for that lookup");
+    assert.deepEqual(titles, ["Checking code2pdf…", "Printing src/util.py"]);
+  });
+
   it("says what to do outside a git repository", async () => {
     const shown = await messages(async () => {
       assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printChanges", { folder: path.dirname(project()) }), undefined);

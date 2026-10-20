@@ -17,8 +17,10 @@ import * as viewer from "./viewer";
 let log: vscode.OutputChannel;
 let state: vscode.Memento;
 let found: cli.Code2pdf | undefined;
-/** Bumped when code2pdf.executable changes, so a lookup that started earlier can't set `found`. */
+/** Bumped when `found` is forgotten, so a lookup that started earlier can't set it. */
 let generation = 0;
+/** The lookup running now, which a print waits for rather than starting code2pdf a second time. */
+let looking: { generation: number; result: Promise<cli.Code2pdf> } | undefined;
 /** The last print command run, to offer it again once code2pdf is installed. */
 let lastPrint: { id: string; args: unknown[] } | undefined;
 /** Checks every few seconds whether an install started from here has finished. */
@@ -103,8 +105,7 @@ export function activate(context: vscode.ExtensionContext) {
     { dispose: stopInstallWatch },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("code2pdf.executable")) {
-        generation++;
-        found = undefined;
+        forgetFound();
         void checkInstalled();
       }
     }),
@@ -249,7 +250,7 @@ async function code2pdf(from: OfferedFrom = "print"): Promise<cli.Code2pdf | und
     return found;
   }
   try {
-    const result = await lookUp();
+    const result = await lookUpShown();
     log.appendLine(`Using ${result.command}: code2pdf ${result.version} (${result.installKind})`);
     return result;
   } catch (error) {
@@ -266,16 +267,44 @@ async function code2pdf(from: OfferedFrom = "print"): Promise<cli.Code2pdf | und
 }
 
 /**
- * Finds code2pdf for the current setting and remembers it, unless the setting changed while it
- * looked: an older, slower lookup finishing last mustn't bring back the old code2pdf.
+ * Finds code2pdf for the current setting and remembers it, unless it was forgotten while it
+ * looked: an older, slower lookup finishing last mustn't bring back the old code2pdf. A lookup
+ * already running (the one activation starts) is shared: code2pdf.exe can take seconds to start.
  */
-async function lookUp(): Promise<cli.Code2pdf> {
+function lookUp(): Promise<cli.Code2pdf> {
   const started = generation;
-  const result = await cli.find(settings().executable);
-  if (started === generation) {
-    found = result;
+  if (looking?.generation !== started) {
+    const result = cli.find(settings().executable).then((ready) => {
+      if (started === generation) {
+        found = ready;
+      }
+      return ready;
+    });
+    looking = { generation: started, result };
+    const done = () => {
+      if (looking?.result === result) {
+        looking = undefined;
+      }
+    };
+    result.then(done, done);
+  }
+  return looking.result;
+}
+
+/** lookUp(), with a notification if it takes more than a moment, so a print never seems to do nothing. */
+async function lookUpShown(): Promise<cli.Code2pdf> {
+  const result = lookUp();
+  const settled = result.then(() => true, () => true);
+  if (!(await Promise.race([settled, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 500))]))) {
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Checking code2pdf…" }, () => settled);
   }
   return result;
+}
+
+/** Forgets the code2pdf found, so the next print looks again. */
+function forgetFound(): void {
+  generation++;
+  found = undefined;
 }
 
 /** Sets the code2pdf.installed context (for the walkthrough), without any message. */
@@ -451,7 +480,7 @@ async function downloadWindowsBuild(label: string): Promise<void> {
     }
     return;
   }
-  found = undefined;
+  forgetFound();
   let installed: cli.Code2pdf;
   try {
     installed = await lookUp();
@@ -482,7 +511,7 @@ function runInTerminal(name: string, command: string, asks?: string): void {
   const terminal = vscode.window.createTerminal({ name });
   terminal.show();
   terminal.sendText(command);
-  found = undefined;
+  forgetFound();
   watchForInstall();
   void vscode.window.showInformationMessage(`${name} is running in the terminal. ${asks ? `${asks} ` : ""}You'll get a message here when it's ready.`);
 }
@@ -935,7 +964,7 @@ async function execute(job: Job): Promise<string | undefined> {
           },
         });
       } catch (error) {
-        found = undefined;  // it was uninstalled or moved: look for it again next time
+        forgetFound();  // it was uninstalled or moved: look for it again next time
         const code = (error as NodeJS.ErrnoException).code;
         ended("failed", { error: code ?? "exception" });
         throw code === "ENOENT" ? new Stop(`code2pdf is no longer at ${command.command}. Print again to look for it.`, "error") : error;
@@ -953,7 +982,7 @@ async function execute(job: Job): Promise<string | undefined> {
   if (result.code !== 0) {
     ended("failed", { exitCode: String(result.code) });
     if (result.code === 127 || result.code === 126) {
-      found = undefined;
+      forgetFound();
     }
     void showWithOutput("error", `code2pdf: ${result.reader.errorMessage() ?? `stopped with exit code ${result.code}`}`);
     return undefined;

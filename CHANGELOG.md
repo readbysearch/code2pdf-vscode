@@ -14,6 +14,9 @@
   replaced. **code2pdf: Choose Where PDFs Go…** picks the Desktop, the workspace folder itself (as
   version 1 did), another folder, or a save dialog each time (the new `code2pdf.askWhereToSave`
   setting).
+- The first print after VS Code starts says at once that it's checking code2pdf, and runs that check
+  once rather than twice. On Windows, where code2pdf.exe can take seconds to start, nothing was
+  shown for several seconds.
 
 ## 2.1.0
 
