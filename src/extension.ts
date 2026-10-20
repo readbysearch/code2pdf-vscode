@@ -8,9 +8,11 @@ import * as download from "./download";
 import * as git from "./git";
 import { INSTALL_GUIDE, type InstallCommand, installCommands, parseOsRelease, updateCommand } from "./install";
 import { type OutputReader, withElapsed } from "./progress";
+import * as save from "./save";
 import * as specs from "./specs";
 import * as telemetry from "./telemetry";
 import * as upgrade from "./upgrade";
+import * as viewer from "./viewer";
 
 let log: vscode.OutputChannel;
 let state: vscode.Memento;
@@ -34,6 +36,12 @@ let firstActivation = false;
 let commandsRun = 0;
 let fromVersion1 = false;
 const NOTE_SHOWN = "version1NoteShown";
+/** The PDF tab (viewer.ts). */
+let pdfTab: viewer.PdfViewer;
+/** Each PDF printed here, and what it was printed from: printing that again replaces it. */
+const MADE = "pdfsMade";
+/** Set once the first PDF saved without asking has said where it went. */
+const SAVE_NOTE_SHOWN = "saveNoteShown";
 
 /** What a print command prints, for the usage events. */
 type PrintKind = "file" | "selection" | "folder" | "files" | "chosen" | "changes";
@@ -84,6 +92,12 @@ export function activate(context: vscode.ExtensionContext) {
   register("extension.printFileToPdf", () => printFile());
   register("extension.printAll", () => printWorkspace());
   context.subscriptions.push(vscode.commands.registerCommand("code2pdf.install", () => guard(installOrCheck)));
+  context.subscriptions.push(vscode.commands.registerCommand("code2pdf.chooseOutputFolder", () => guard(chooseOutputFolder)));
+  pdfTab = new viewer.PdfViewer(context.extensionUri, (line) => log.appendLine(line));
+  context.subscriptions.push(vscode.window.registerCustomEditorProvider(viewer.VIEW_TYPE, pdfTab, {
+    webviewOptions: { enableFindWidget: true },
+    supportsMultipleEditorsPerDocument: true,
+  }));
   context.subscriptions.push(
     log,
     { dispose: stopInstallWatch },
@@ -222,7 +236,8 @@ function settings(scope?: vscode.Uri) {
   return {
     print,
     outputFolder: config.get<string>("outputFolder", "").trim(),
-    openWith: config.get<"viewer" | "editor" | "none">("openWith", "viewer"),
+    askWhereToSave: config.get<boolean>("askWhereToSave", false),
+    openWith: config.get<"viewer" | "editor" | "none">("openWith", "editor"),
     executable: config.get<string>("executable", ""),
   };
 }
@@ -557,28 +572,51 @@ async function pickWorkspaceFolder(placeHolder: string): Promise<vscode.Uri> {
   return folder.uri;
 }
 
-/** Where to save NAME: the outputFolder setting, or a save dialog. Undefined if cancelled. */
-async function outputPath(name: string, workspace: string | undefined, kind: PrintKind): Promise<string | undefined> {
-  const home = os.homedir();
+/** The folder PDFs go to without asking: the outputFolder setting, or the Desktop (save.ts). */
+async function saveFolder(workspace: string | undefined): Promise<string> {
   const folder = settings().outputFolder;
-  if (folder) {
-    const absolute = specs.expandHome(folder, home);
-    return path.join(path.isAbsolute(absolute) ? absolute : path.join(workspace ?? home, absolute), name);
+  if (!folder) {
+    return save.defaultFolder();
   }
-  const last = state.get<string>("lastFolder");
-  const start = last && isFolder(last) ? last : [path.join(home, "Desktop"), path.join(home, "Documents")].find(isFolder) ?? home;
-  const uri = await vscode.window.showSaveDialog({
-    defaultUri: vscode.Uri.file(path.join(start, name)),
-    filters: { PDF: ["pdf"] },
-    saveLabel: "Print",
-    title: "Save the PDF",
-  });
-  if (!uri) {
-    record("print", { kind, outcome: "saveCancelled", saveTo: "dialog" });
-    return undefined;
+  const absolute = specs.expandHome(folder, os.homedir());
+  return path.isAbsolute(absolute) ? absolute : path.join(workspace ?? os.homedir(), absolute);
+}
+
+/** How the PDF's place is decided, for usage data. */
+function saveTo(): "dialog" | "folderSetting" | "default" {
+  const { askWhereToSave, outputFolder } = settings();
+  return askWhereToSave ? "dialog" : outputFolder ? "folderSetting" : "default";
+}
+
+/**
+ * Where to save NAME, printed from FROM: in saveFolder(), under a name that doesn't replace a file
+ * code2pdf didn't make from FROM, or where a save dialog says if askWhereToSave is on.
+ * Undefined if the dialog was cancelled.
+ */
+async function outputPath(name: string, workspace: string | undefined, kind: PrintKind, from: string): Promise<string | undefined> {
+  const source = `${kind} ${from}`;
+  const made = state.get<Record<string, string>>(MADE, {});
+  let pdf: string;
+  if (settings().askWhereToSave) {
+    const last = state.get<string>("lastFolder");
+    const start = last && isFolder(last) ? last : await save.defaultFolder();
+    const uri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(start, name)),
+      filters: { PDF: ["pdf"] },
+      saveLabel: "Print",
+      title: "Save the PDF",
+    });
+    if (!uri) {
+      record("print", { kind, outcome: "saveCancelled", saveTo: "dialog" });
+      return undefined;
+    }
+    await state.update("lastFolder", path.dirname(uri.fsPath));
+    pdf = uri.fsPath.toLowerCase().endsWith(".pdf") ? uri.fsPath : `${uri.fsPath}.pdf`;
+  } else {
+    pdf = save.freePath(await saveFolder(workspace), name, source, made);
   }
-  await state.update("lastFolder", path.dirname(uri.fsPath));
-  return uri.fsPath.toLowerCase().endsWith(".pdf") ? uri.fsPath : `${uri.fsPath}.pdf`;
+  await state.update(MADE, save.remember(made, pdf, source));
+  return pdf;
 }
 
 /** Saves DOCUMENT if the user wants to; throws Stop if they cancel. */
@@ -627,7 +665,7 @@ async function printFile(uri?: vscode.Uri): Promise<string | undefined> {
   await savedOrStop(file, false);
   const root = workspaceFolderOf(file) ?? path.dirname(file.fsPath);
   const rel = specs.relativePath(root, file.fsPath);
-  const output = await outputPath(`${specs.fileNamePart(specs.stem(file.fsPath))}.pdf`, root, "file");
+  const output = await outputPath(`${specs.fileNamePart(specs.stem(file.fsPath))}.pdf`, root, "file", file.fsPath);
   if (!output) {
     return undefined;
   }
@@ -653,7 +691,7 @@ async function printSelection(): Promise<string | undefined> {
   const root = workspaceFolderOf(file) ?? path.dirname(file.fsPath);
   const rel = specs.relativePath(root, file.fsPath);
   const spec = specs.rangeSpec(rel, ranges);
-  const output = await outputPath(specs.selectionPdfName(file.fsPath, ranges), root, "selection");
+  const output = await outputPath(specs.selectionPdfName(file.fsPath, ranges), root, "selection", file.fsPath);
   if (!output) {
     return undefined;
   }
@@ -670,7 +708,7 @@ async function printFolder(folder: vscode.Uri): Promise<string | undefined> {
   }
   const root = workspaceFolderOf(folder) ?? folder.fsPath;
   const rel = specs.relativePath(root, folder.fsPath);
-  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root, "folder");
+  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root, "folder", folder.fsPath);
   if (!output) {
     return undefined;
   }
@@ -714,7 +752,7 @@ async function printMany(uris: vscode.Uri[]): Promise<string | undefined> {
   if (!files.length) {
     throw new Stop("There's nothing to print in the selected folders: code2pdf's selection found no source files.");
   }
-  const output = await outputPath(`${specs.fileNamePart(path.basename(root))}-selected.pdf`, root, "files");
+  const output = await outputPath(`${specs.fileNamePart(path.basename(root))}-selected.pdf`, root, "files", root);
   if (!output) {
     return undefined;
   }
@@ -752,7 +790,7 @@ async function chooseFiles(uri?: vscode.Uri): Promise<string | undefined> {
   if (!picked?.length) {
     return undefined;
   }
-  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root, "chosen");
+  const output = await outputPath(`${specs.fileNamePart(path.basename(folder.fsPath))}.pdf`, root, "chosen", folder.fsPath);
   if (!output) {
     return undefined;
   }
@@ -803,7 +841,7 @@ async function printChanges(target?: ChangesTarget): Promise<string | undefined>
     }
     ({ rev, name } = picked);
   }
-  const output = await outputPath(`${specs.fileNamePart(name)}.pdf`, folder, "changes");
+  const output = await outputPath(`${specs.fileNamePart(name)}.pdf`, folder, "changes", folder);
   if (!output) {
     return undefined;
   }
@@ -858,7 +896,7 @@ async function execute(job: Job): Promise<string | undefined> {
   const ended = (outcome: string, data: telemetry.EventData<"print"> = {}) => record("print", {
     kind: job.kind,
     outcome,
-    saveTo: settings().outputFolder ? "folderSetting" : "dialog",
+    saveTo: saveTo(),
     openWith: settings().openWith,
     seconds: Math.round((Date.now() - begun) / 100) / 10,
     ...data,
@@ -922,13 +960,16 @@ async function execute(job: Job): Promise<string | undefined> {
     return undefined;
   }
   ended("printed", { pages: result.reader.pages ?? 0, warnings: result.reader.warnings.length });
-  await finished(job.output, result.reader);
+  await finished(job.output, result.reader, saveTo());
   showVersion1Note();
   return job.output;
 }
 
-/** Opens the PDF as the openWith setting says, and says what code2pdf warned about. */
-async function finished(pdf: string, reader: OutputReader): Promise<void> {
+/**
+ * Opens the PDF as the openWith setting says, and says what code2pdf warned about. The first PDF
+ * saved without asking also says where it went, with a button to change that.
+ */
+async function finished(pdf: string, reader: OutputReader, savedBy: ReturnType<typeof saveTo>): Promise<void> {
   const name = path.basename(pdf);
   const pages = reader.pages ? `, ${reader.pages.toLocaleString("en-US")} page${reader.pages === 1 ? "" : "s"}` : "";
   const remarks = [...reader.warnings, ...reader.notes];
@@ -937,22 +978,31 @@ async function finished(pdf: string, reader: OutputReader): Promise<void> {
   const openWith = settings().openWith;
   const remote = vscode.env.remoteName;
   const uri = vscode.Uri.file(pdf);
+  // Version 1 users hear where PDFs go in their own note (showVersion1Note)
+  const firstSave = savedBy === "default" && !state.get<boolean>(SAVE_NOTE_SHOWN);
+  if (firstSave) {
+    void state.update(SAVE_NOTE_SHOWN, true);
+  }
+  const sayWhere = firstSave && !fromVersion1;
 
   if (openWith === "viewer" && !remote) {
     await vscode.env.openExternal(uri);
   } else if (openWith === "editor") {
-    await vscode.commands.executeCommand("vscode.open", uri);
+    await pdfTab.open(uri);
   }
   const opened = (openWith === "viewer" && !remote) || openWith === "editor";
-  if (opened && !remarks.length) {
+  if (opened && !remarks.length && !sayWhere) {
     vscode.window.setStatusBarMessage(`$(check) code2pdf: ${name}${pages}`, 8000);
     return;
   }
   const where = remote ? `${pdf} (on ${remote})` : pdf;
-  const message = opened ? `Saved ${name}${pages}.${remark}` : `Saved ${where}${pages}.${remark}`;
+  const message = sayWhere
+    ? `Saved ${name}${pages} in ${save.tilde(path.dirname(pdf))}. PDFs go there unless you choose another place.${remark}`
+    : opened ? `Saved ${name}${pages}.${remark}` : `Saved ${where}${pages}.${remark}`;
   const buttons = [
     ...(opened ? [] : remote ? ["Open in VS Code"] : ["Open"]),
     ...(remote ? ["Copy Path"] : [process.platform === "darwin" ? "Reveal in Finder" : "Show in Folder"]),
+    ...(sayWhere ? ["Change…"] : []),
     ...(remarks.length ? ["Show Output"] : []),
   ];
   // Not awaited: the command is done, whether or not the message is ever clicked
@@ -960,13 +1010,66 @@ async function finished(pdf: string, reader: OutputReader): Promise<void> {
     if (choice === "Open") {
       void vscode.env.openExternal(uri);
     } else if (choice === "Open in VS Code") {
-      void vscode.commands.executeCommand("vscode.open", uri);
+      void pdfTab.open(uri);
     } else if (choice === "Copy Path") {
       void vscode.env.clipboard.writeText(pdf);
     } else if (choice === "Reveal in Finder" || choice === "Show in Folder") {
       void vscode.commands.executeCommand("revealFileInOS", uri);
+    } else if (choice === "Change…") {
+      void guard(chooseOutputFolder);
     } else if (choice === "Show Output") {
       log.show(true);
     }
   });
+}
+
+/** Sets a code2pdf setting where it's set now (this workspace, or else the user's settings). */
+async function updateSetting(key: string, value: unknown): Promise<void> {
+  const config = vscode.workspace.getConfiguration("code2pdf");
+  const target = config.inspect(key)?.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+  await config.update(key, value, target);
+}
+
+/** The Choose Where PDFs Go command, and the Change… button after the first PDF. */
+async function chooseOutputFolder(): Promise<undefined> {
+  const { outputFolder, askWhereToSave } = settings();
+  const desktop = await save.defaultFolder();
+  const now = askWhereToSave ? "ask" : outputFolder === "." ? "project" : outputFolder ? "other" : "desktop";
+  type Item = vscode.QuickPickItem & { choice: typeof now };
+  const items: Item[] = [
+    { choice: "desktop", label: save.tilde(desktop), description: "the Desktop, or Documents if there's none" },
+    { choice: "project", label: "The workspace folder", description: "next to the code, as version 1 did" },
+    { choice: "other", label: "Another folder…", description: now === "other" ? outputFolder : undefined },
+    { choice: "ask", label: "Ask each time", description: "a save dialog for every PDF" },
+  ];
+  for (const item of items) {
+    if (item.choice === now) {
+      item.label = `$(check) ${item.label}`;
+    }
+  }
+  const picked = await vscode.window.showQuickPick(items, { title: "Where should PDFs go?", placeHolder: "Choose where code2pdf saves each PDF" });
+  if (!picked) {
+    return undefined;
+  }
+  if (picked.choice === "ask") {
+    await updateSetting("askWhereToSave", true);
+    void show("info", "code2pdf will ask where to save each PDF.");
+    return undefined;
+  }
+  let folder: string | undefined;  // undefined: the default, the Desktop
+  if (picked.choice === "project") {
+    folder = ".";
+  } else if (picked.choice === "other") {
+    const chosen = await vscode.window.showOpenDialog({
+      canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: "Save PDFs Here", defaultUri: vscode.Uri.file(desktop),
+    });
+    if (!chosen?.[0]) {
+      return undefined;
+    }
+    folder = chosen[0].fsPath;
+  }
+  await updateSetting("outputFolder", folder);
+  await updateSetting("askWhereToSave", undefined);
+  void show("info", `PDFs will go ${folder === "." ? "into the workspace folder" : `to ${save.tilde(folder ?? desktop)}`}, without asking.`);
+  return undefined;
 }

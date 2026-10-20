@@ -31,6 +31,17 @@ README.md only.
   `vscode.env.createTelemetryLogger` (nothing when VS Code's telemetry is off or
   `code2pdf.telemetry` is false, and nothing while `CONNECTION_STRING` is empty). `EVENTS` lists every field that may be sent; the sender drops
   any other.
+- `src/save.ts`: where a PDF goes without asking: the Desktop (Windows' registry, which knows
+  where OneDrive moved it; XDG's user-dirs on Linux, where it may be `~/桌面`), else Documents,
+  else home. `freePath` never replaces a file code2pdf didn't make from the same print: the
+  `pdfsMade` list in globalState maps each PDF to what it was printed from.
+- `src/viewer.ts`, `media/viewer.js`, `media/viewer.css`: the PDF tab, a custom editor
+  (`code2pdf.pdf`, priority `option`, so it never takes over other PDFs) whose webview runs
+  pdf.js. The extension sends the file's bytes (as a plain Uint8Array: a Node Buffer arrives as
+  JSON), so it works over Remote SSH and WSL, and again when the file changes. pdf.js's worker
+  starts from a blob URL (a webview can't start one from its resource origin). `pdfjs-dist` is a
+  devDependency pinned to an exact version; `scripts/copy-pdfjs.mjs` (part of `compile`) copies
+  its legacy build to `out/pdfjs`, which also runs in VS Code 1.90's Chromium.
 - `src/upgrade.ts`: telling version 1 users what changed, once. VS Code doesn't say what an
   update came from, so it's inferred: version 1 settings set, or the first print is what
   activated the extension for the first time (a fresh Marketplace install opens the walkthrough,
@@ -85,7 +96,7 @@ npm run lint
 npm run test:unit            # node:test; the code2pdf-backed tests skip if it isn't installed
 npx vscode-test              # integration, in a downloaded VS Code (.vscode-test/), on a git fixture
 VSCODE_TEST_VERSION=1.90.0 npx vscode-test   # the oldest VS Code in engines
-CODE2PDF_TEST_FILES='out/test/manual/*.test.js' npx vscode-test   # opens a PDF in the viewer
+CODE2PDF_TEST_FILES='out/test/manual/*.test.js' npx vscode-test   # opens a PDF in the viewer, and in the tab for 20 s
 npm run test:fresh           # first print on fresh Ubuntu 24.04 and 22.04 containers (needs Docker)
 test/usage-data.sh           # usage data against Azure (needs `az login`; macOS, or Linux with a display)
 ```
@@ -119,8 +130,9 @@ scripts skip on Windows (`POSIX_ONLY`).
 1. Bump `version` in package.json (above the version on the Marketplace) and add a
    CHANGELOG.md entry.
 2. `npm run lint && npm run test:unit && npx vscode-test && test/usage-data.sh`, then
-   `npx vsce package` and `npx vsce ls` to check the contents (only out/*.js, telemetry.json,
-   the icon and images/pages.png, media/install.md, README, CHANGELOG, LICENSE).
+   `npx vsce package` and `npx vsce ls` to check the contents (only out/*.js, out/pdfjs/ (pdf.js,
+   its LICENSE and spinner), media/viewer.js and viewer.css, telemetry.json, the icon and
+   images/pages.png, media/install.md, README, CHANGELOG, LICENSE).
 3. Commit as readbysearch and push `main` (`gh auth switch -u readbysearch`; switch back to
    waleking afterwards), wait for CI, then tag `vX.Y.Z` and push the tag.
 4. Publish: upload the .vsix at https://marketplace.visualstudio.com/manage/publishers/readbysearch

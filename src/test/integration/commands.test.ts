@@ -89,14 +89,14 @@ describe("code2pdf", () => {
       const before = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
       assert.ok(before.some((m) => m.startsWith("Version 2 of this extension prints with the code2pdf command-line tool instead of Vim and Ghostscript")),
         before.join(" | "));
-      assert.ok(!before.some((m) => m.startsWith("code2pdf 2.0:")), "no note before anything is printed");
+      assert.ok(!before.some((m) => m.startsWith("code2pdf 2:")), "no note before anything is printed");
 
       cliModule.find = realFind;  // now it's installed
       await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
       const first = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
-      assert.equal(first.filter((m) => m.startsWith("code2pdf 2.0: you now choose where each PDF goes")).length, 1, first.join(" | "));
+      assert.equal(first.filter((m) => m.startsWith("code2pdf 2: PDFs now go to your Desktop")).length, 1, first.join(" | "));
       const second = await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
-      assert.ok(!second.some((m) => m.startsWith("code2pdf 2.0:")), "only once");
+      assert.ok(!second.some((m) => m.startsWith("code2pdf 2:")), "only once");
     } finally {
       cliModule.find = realFind;
       await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
@@ -215,9 +215,8 @@ describe("code2pdf", () => {
 
   it("says so when code2pdf isn't where the setting points", async () => {
     const config = vscode.workspace.getConfiguration("code2pdf");
-    const outputFolder = config.inspect<string>("outputFolder")?.workspaceValue;
     await config.update("executable", "/nonexistent/code2pdf", vscode.ConfigurationTarget.Global);
-    await config.update("outputFolder", "", vscode.ConfigurationTarget.Workspace);
+    await config.update("askWhereToSave", true, vscode.ConfigurationTarget.Workspace);
     try {
       let asked = false;
       const shown = await messages(() => stubbed("showSaveDialog", () => {
@@ -230,7 +229,101 @@ describe("code2pdf", () => {
       assert.ok(!asked, "doesn't ask where to save a PDF it can't make");
     } finally {
       await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+      await config.update("askWhereToSave", undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
+  it("saves on the Desktop without asking, and never over a file it didn't make", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const saveModule = require("../../save") as { defaultFolder: () => Promise<string> };
+    const realDefault = saveModule.defaultFolder;
+    const desktop = fs.mkdtempSync(path.join(path.dirname(process.env.CODE2PDF_TEST_PDFS ?? os.tmpdir()), "desktop-"));
+    fs.writeFileSync(path.join(desktop, "util.pdf"), "someone else's util.pdf");
+    saveModule.defaultFolder = () => Promise.resolve(desktop);
+    // A first print, so this one isn't taken for a version 1 user's (they hear where PDFs go in their own note)
+    await messages(() => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    const outputFolder = config.inspect<string>("outputFolder")?.workspaceValue;
+    await config.update("outputFolder", undefined, vscode.ConfigurationTarget.Workspace);
+    try {
+      let asked = false;
+      const shown = await messages(() => stubbed("showSaveDialog", () => {
+        asked = true;
+        return Promise.resolve(undefined);
+      }, async () => {
+        const mine = path.join(desktop, "util (2).pdf");
+        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")), mine);
+        assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")), mine, "printed again: replaced");
+      }));
+      assert.ok(!asked, "no save dialog");
+      assert.equal(fs.readFileSync(path.join(desktop, "util.pdf"), "utf8"), "someone else's util.pdf");
+      assert.deepEqual(fs.readdirSync(desktop).sort(), ["util (2).pdf", "util.pdf"]);
+      assert.equal(shown.filter((m) => /^Saved util \(2\)\.pdf, \d+ pages? in .+\. PDFs go there unless you choose another place\.$/.test(m)).length, 1,
+        `says where, once: ${shown.join(" | ")}`);
+    } finally {
+      saveModule.defaultFolder = realDefault;
       await config.update("outputFolder", outputFolder, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
+  it("Choose Where PDFs Go sets the folder, or asking each time", async () => {
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    const outputFolder = config.inspect<string>("outputFolder")?.workspaceValue;
+    const choose = (which: (item: vscode.QuickPickItem) => boolean) => messages(() => stubbed("showQuickPick",
+      (items: vscode.QuickPickItem[]) => Promise.resolve(items.find(which)),
+      () => vscode.commands.executeCommand("code2pdf.chooseOutputFolder")));
+    const now = () => vscode.workspace.getConfiguration("code2pdf");
+    try {
+      await choose((i) => /The workspace folder/.test(i.label));
+      assert.equal(now().inspect<string>("outputFolder")?.workspaceValue, ".", "changed where it's set: this workspace");
+      await choose((i) => /Ask each time/.test(i.label));
+      assert.equal(now().get<boolean>("askWhereToSave"), true);
+      let asked = false;
+      await stubbed("showSaveDialog", () => {
+        asked = true;
+        return Promise.resolve(undefined);
+      }, () => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py")));
+      assert.ok(asked, "asks where to save");
+      await choose((i) => /the Desktop/.test(i.description ?? ""));
+      assert.equal(now().inspect<string>("outputFolder")?.workspaceValue, undefined);
+      assert.equal(now().get<boolean>("askWhereToSave"), false);
+    } finally {
+      await config.update("outputFolder", outputFolder, vscode.ConfigurationTarget.Workspace);
+      await config.update("askWhereToSave", undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  it("opens the PDF in its own tab, which draws it, and shows it again when it's printed again", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const viewerModule = require("../../viewer") as { rendered: Map<string, number>; failures: Map<string, string>; VIEW_TYPE: string };
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    const openWith = config.inspect<string>("openWith")?.workspaceValue;
+    await config.update("openWith", "editor", vscode.ConfigurationTarget.Workspace);
+    const pdf = path.join(process.env.CODE2PDF_TEST_PDFS ?? "", "util.pdf");
+    const same = (file: string) => file.toLowerCase() === pdf.toLowerCase();  // Windows: Uri.fsPath says c:\
+    const pages = () => [...viewerModule.rendered].find(([file]) => same(file))?.[1];
+    const drawn = async (what: string) => {
+      for (let i = 0; i < 300 && !pages(); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      assert.ok(pages(), `${what}${[...viewerModule.failures.values()].map((f) => `; it said: ${f}`).join("")}`);
+    };
+    const tabs = () => vscode.window.tabGroups.all.flatMap((g) => g.tabs)
+      .filter((t) => t.input instanceof vscode.TabInputCustom && t.input.viewType === viewerModule.VIEW_TYPE && same(t.input.uri.fsPath));
+    try {
+      viewerModule.rendered.clear();
+      assert.equal(await vscode.commands.executeCommand<string>("code2pdf.printFile", uri("src/util.py")), pdf);
+      await drawn("the tab drew the PDF");
+      assert.equal(tabs().length, 1);
+      assert.ok(tabs()[0].isActive, "and it's the tab in front");
+      viewerModule.rendered.clear();
+      await new Promise((r) => setTimeout(r, 50));  // a different modification time
+      await vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py"));
+      await drawn("printed again: the tab shows the new PDF");
+      assert.equal(tabs().length, 1, "in the same tab");
+    } finally {
+      await config.update("openWith", openWith, vscode.ConfigurationTarget.Workspace);
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     }
   });
 

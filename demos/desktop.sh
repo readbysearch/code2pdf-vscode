@@ -1,6 +1,6 @@
 #!/bin/bash
-# Inside the container: a 1280x800 virtual screen, and VS Code with this extension and a PDF viewer,
-# with settings that keep the screen clean (PDFs open in a VS Code tab). record.py starts VS Code.
+# Inside the container: a 1280x800 virtual screen, and VS Code with this extension, with settings
+# that keep the screen clean (PDFs open in the extension's own tab). record.py starts VS Code.
 set -euo pipefail
 export DISPLAY=:99
 export XCURSOR_THEME=DMZ-White XCURSOR_SIZE=24
@@ -35,9 +35,7 @@ cat > ~/.config/Code/User/settings.json <<'JSON'
   "git.openRepositoryInParentFolders": "never",
   "scm.defaultViewMode": "list",
   "files.simpleDialog.enable": true,
-  "code2pdf.outputFolder": "/home/demo/printouts",
-  "code2pdf.openWith": "editor"
+  "code2pdf.outputFolder": "/home/demo/printouts"
 }
 JSON
 code --install-extension /ext.vsix --force >/tmp/install.log 2>&1
-code --install-extension tomoki1207.pdf --force >>/tmp/install.log 2>&1

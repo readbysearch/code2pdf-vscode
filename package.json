@@ -2,7 +2,7 @@
   "name": "code2pdf",
   "displayName": "code2pdf: Print Code to PDF",
   "description": "Print source code as a PDF made for reading: a contents page, syntax highlighting, real line numbers and a bookmark per file. Print a folder, chosen files, a selection, or what changed in git with the changed lines marked.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "readbysearch",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -86,6 +86,11 @@
         "category": "code2pdf"
       },
       {
+        "command": "code2pdf.chooseOutputFolder",
+        "title": "Choose Where PDFs Go…",
+        "category": "code2pdf"
+      },
+      {
         "command": "extension.printFileToPdf",
         "title": "Print File to PDF (old name)"
       },
@@ -156,30 +161,36 @@
         "code2pdf.outputFolder": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Folder to save PDFs in without asking, such as `~/Documents/printouts`. Leave empty to choose where to save each PDF. A relative path is relative to the workspace folder.",
+          "markdownDescription": "Folder to save PDFs in, such as `~/Documents/printouts`. Leave empty for your Desktop (or Documents, or your home folder, if there's no Desktop). `.` is the workspace folder, as version 1 did; a relative path is relative to the workspace folder. [Choose Where PDFs Go](command:code2pdf.chooseOutputFolder)",
           "order": 1
+        },
+        "code2pdf.askWhereToSave": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Ask where to save each PDF, starting in the folder used last, instead of saving it in `#code2pdf.outputFolder#`.",
+          "order": 2
         },
         "code2pdf.openWith": {
           "type": "string",
           "enum": [
-            "viewer",
             "editor",
+            "viewer",
             "none"
           ],
           "enumDescriptions": [
+            "Open the PDF in a VS Code tab",
             "Open the PDF in your computer's PDF viewer",
-            "Open the PDF in a VS Code tab (needs a PDF viewer extension)",
             "Don't open it; show where it was saved"
           ],
-          "default": "viewer",
+          "default": "editor",
           "description": "What to do with a PDF once it's made.",
-          "order": 2
+          "order": 3
         },
         "code2pdf.theme": {
           "type": "string",
           "default": "paper",
           "markdownDescription": "Colour theme: `paper` (the default), `mono` (black and white, for printers), or the name of any Pygments style, such as `github-dark` or `solarized-light`. Run `code2pdf --list-themes` for the full list.",
-          "order": 3
+          "order": 4
         },
         "code2pdf.include": {
           "type": "array",
@@ -188,7 +199,7 @@
           },
           "default": [],
           "markdownDescription": "Globs to add when printing a folder, for files the default selection leaves out: data files such as `*.json`, hidden folders such as `.github`, or skipped folders such as `vendor/mylib`. Passed to code2pdf as `--include`.",
-          "order": 4
+          "order": 5
         },
         "code2pdf.exclude": {
           "type": "array",
@@ -197,14 +208,14 @@
           },
           "default": [],
           "markdownDescription": "Globs to leave out when printing a folder or changes, such as `tests`, `*_test.go` or `docs/**/*.md`. Without `/` a glob matches names at any depth; with `/` it matches the path from the folder. Passed to code2pdf as `--exclude`.",
-          "order": 5
+          "order": 6
         },
         "code2pdf.executable": {
           "type": "string",
           "default": "",
           "scope": "machine",
           "markdownDescription": "Path to the `code2pdf` command. Leave empty to find it on your `PATH` and in the usual install folders.",
-          "order": 6
+          "order": 7
         },
         "code2pdf.telemetry": {
           "type": "boolean",
@@ -215,7 +226,7 @@
             "usesOnlineServices"
           ],
           "markdownDescription": "Send anonymous usage data, which shows where people get stuck installing code2pdf and printing. It's sent only when VS Code's `#telemetry.telemetryLevel#` is `all` as well: that setting turns usage data off for VS Code and every extension, this one for code2pdf alone. [What is sent](https://github.com/readbysearch/code2pdf-vscode#usage-data)",
-          "order": 7
+          "order": 8
         },
         "code2pdf.blacklisted_folders": {
           "type": "array",
@@ -299,11 +310,23 @@
           }
         ]
       }
+    ],
+    "customEditors": [
+      {
+        "viewType": "code2pdf.pdf",
+        "displayName": "code2pdf PDF Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "option"
+      }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && node scripts/copy-pdfjs.mjs",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src",
     "test:unit": "npm run compile && node --test \"out/test/unit/**/*.test.js\"",
@@ -321,6 +344,7 @@
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
     "eslint": "^10.12.0",
+    "pdfjs-dist": "6.4.299",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1"
   }

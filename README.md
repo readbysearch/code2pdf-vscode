@@ -76,9 +76,8 @@ runs on that machine: install it there, as on Linux. Print Changes uses git; on 
 ## Printing
 
 Right-click in the Explorer, an editor, an editor tab or the Source Control menu, or run the
-commands from the Command Palette (they start with "code2pdf"). In the clips below, the PDF opens
-in a VS Code tab (`code2pdf.openWith` set to `editor`, with a PDF viewer extension); by default it
-opens in your PDF viewer.
+commands from the Command Palette (they start with "code2pdf"). The PDF is saved on your Desktop
+and opens in a VS Code tab, as in the clips below.
 
 ### A folder
 
@@ -122,6 +121,20 @@ A progress notification shows the page count as code2pdf works. Cancel it to sto
 done, the PDF opens, and any warnings from code2pdf are shown. Everything code2pdf printed is in
 the **code2pdf** output panel.
 
+### Where the PDF goes
+
+Each PDF is saved on your Desktop without asking (in Documents, or your home folder, if there's
+no Desktop), and opens in a VS Code tab. Printing the same thing again replaces its PDF, and the
+open tab shows the new one. A file of the same name that code2pdf didn't make is never replaced:
+the new PDF is then `util (2).pdf`, say. To save somewhere else, run **code2pdf: Choose Where PDFs
+Go…** and pick the workspace folder (as version 1 did), another folder, or a save dialog each
+time.
+
+The tab shows the page you're on, zooms, and follows the contents page's links. **Open in Default
+App** opens the PDF in your computer's PDF viewer, to print it on paper. Over Remote SSH and in
+WSL, the PDF is saved on the remote machine and still shows in the tab. The tab uses
+[pdf.js](https://github.com/mozilla/pdf.js) (Apache License 2.0).
+
 ### The pages
 
 A contents page with page numbers, then each file with its path, its own line numbers and the date
@@ -133,8 +146,9 @@ it last changed in git; a print of changes marks the changed lines with a bar in
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `code2pdf.outputFolder` | empty | A folder to save PDFs in without asking. Empty: you choose where each PDF goes. |
-| `code2pdf.openWith` | `viewer` | Open the PDF in your PDF `viewer`, in a VS Code tab (`editor`, needs a PDF viewer extension), or `none`. |
+| `code2pdf.outputFolder` | empty | Where PDFs go. Empty: your Desktop (Documents, or your home folder, if there's no Desktop). `.` is the workspace folder. |
+| `code2pdf.askWhereToSave` | `false` | `true` asks where to save each PDF instead. |
+| `code2pdf.openWith` | `editor` | Open the PDF in a VS Code tab (`editor`), in your computer's PDF `viewer`, or `none`. |
 | `code2pdf.theme` | `paper` | `paper`, `mono` (black and white, for printers), or any Pygments style, such as `github-dark`. |
 | `code2pdf.include` | `[]` | Globs to add when printing a folder: `*.json`, `.github`, `vendor/mylib`. |
 | `code2pdf.exclude` | `[]` | Globs to leave out when printing a folder or changes: `tests`, `*_test.go`, `docs/**/*.md`. |
@@ -151,17 +165,18 @@ different:
 
 - **It needs the code2pdf tool** instead of Vim, Ghostscript and jq. The first print offers to
   install it.
-- **You choose where each PDF goes.** Version 1 saved `merged.pdf` (or `<file>.pdf`) into the
-  project folder. To save into the project again without being asked, set
-  `code2pdf.outputFolder` to `.`. A folder's PDF is then named after the folder, such as
-  `shop.pdf`.
+- **PDFs go to your Desktop.** Version 1 saved `merged.pdf` (or `<file>.pdf`) into the project
+  folder. To save into the project again, run **code2pdf: Choose Where PDFs Go…** and pick the
+  workspace folder, or set `code2pdf.outputFolder` to `.`. A folder's PDF is then named after the
+  folder, such as `shop.pdf`.
 - **More files are printed.** Version 1 printed only `.py` and `.sh` files, plus `README.md` and
   `launch.json`. Version 2 prints all common source code, Markdown, YAML and TOML, and skips
   build output, virtual environments and hidden folders. Use `code2pdf.exclude` to leave files
   out.
 - **"Print All Src File to A Single PDF" is now "Print All Source Files to PDF".** Keybindings to
   the old commands still work.
-- **The PDF opens when it's done.** Set `code2pdf.openWith` to `none` to turn that off.
+- **The PDF opens in a VS Code tab when it's done.** Set `code2pdf.openWith` to `viewer` for your
+  computer's PDF viewer, or to `none`.
 - **Your old settings still work** if you set them (`blacklisted_folders`,
   `whitelisted_file_extensions` and so on). One difference: `blacklisted_folders` now adds to the
   folders code2pdf skips (`node_modules`, `dist`, `out` and others) instead of replacing them.
@@ -185,7 +200,8 @@ settings can't turn it back on.
   one: how long it took.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or
   changes), whether it printed, failed or was cancelled, the pages, how long it took, and
-  whether the PDF's place came from the save dialog or the `code2pdf.outputFolder` setting.
+  and two settings: where PDFs go (the Desktop, a folder you set, or a save dialog) and what
+  opens them.
 
 Each event also carries the versions of the extension and VS Code, the editor's name, the
 operating system and processor type, the kind of remote session, and a random ID for this

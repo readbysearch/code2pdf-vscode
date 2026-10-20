@@ -8,3 +8,6 @@
 !images/pages.png
 !media/install.md
 !telemetry.json
+!out/pdfjs/**
+!media/viewer.js
+!media/viewer.css

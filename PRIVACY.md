@@ -1,7 +1,7 @@
 # Privacy
 
 This policy covers the code2pdf extension for VS Code (`readbysearch.code2pdf`), published by
-readbysearch. Last changed on 20 October 2026, for version 2.1.0.
+readbysearch. Last changed on 20 October 2026, for version 2.2.0.
 
 ## In short
 
@@ -24,7 +24,7 @@ readbysearch. Last changed on 20 October 2026, for version 2.1.0.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or changes),
   whether it printed, failed, was cancelled or its save dialog was closed, the number of pages
   and warnings, how long it took, code2pdf's exit code if it failed, and two settings: whether
-  PDFs go to a save dialog or a set folder, and what opens them.
+  PDFs go to the Desktop, a set folder or a save dialog, and what opens them.
 
 Every event also carries the versions of the extension and VS Code, the editor's name (such as
 Visual Studio Code or Cursor), the operating system, the processor type, the kind of remote

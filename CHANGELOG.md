@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.0
+
+- PDFs open in a VS Code tab, with no other extension needed: the page you're on, zoom, and the
+  contents page's links. **Open in Default App** opens the PDF in your computer's PDF viewer, to
+  print it on paper. It works over Remote SSH and in WSL too. Set `code2pdf.openWith` to `viewer`
+  for the PDF viewer, as before.
+- PDFs are saved on your Desktop without asking (in Documents, or your home folder, if there's no
+  Desktop), and the first one says where it went. Printing the same thing again replaces its PDF,
+  and the open tab shows the new one; a file code2pdf didn't make is never replaced. **code2pdf:
+  Choose Where PDFs Go…** picks the workspace folder (as version 1 did), another folder, or a save
+  dialog each time (the new `code2pdf.askWhereToSave` setting).
+
 ## 2.1.0
 
 - Windows: code2pdf runs on Windows itself, with no WSL (code2pdf 3.13 has a Windows build).
