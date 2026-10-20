@@ -24,6 +24,8 @@ export interface DownloadOptions {
   /** Where the zip and its .sha256 are: the latest release, or a test server. */
   base?: string;
   onProgress?: (received: number, total: number | undefined) => void;
+  /** What it's doing after the download, which takes a while too: unpacking, then checking it runs. */
+  onStep?: (step: string) => void;
   cancellation?: Cancellation;
   log?: (line: string) => void;
 }
@@ -145,12 +147,14 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
       throw new Error(`the download is damaged: its SHA-256 is ${actual}, not ${expected}`);
     }
     log(`SHA-256 ${actual}: as published. Unpacking into ${unpacked}`);
+    options.onStep?.("Unpacking…");
     fs.mkdirSync(unpacked);
     await run(tar(), ["-xf", zip, "-C", unpacked]);
     const exe = path.join(unpacked, "code2pdf", "code2pdf.exe");
     if (!fs.existsSync(exe)) {
       throw new Error(`${ZIP} has no code2pdf\\code2pdf.exe`);
     }
+    options.onStep?.("Checking that it runs…");
     const version = (await run(exe, ["--version"])).split("\n")[0].trim();
     if (!version.startsWith("code2pdf ")) {
       throw new Error(`the downloaded code2pdf.exe doesn't run: ${version}`);

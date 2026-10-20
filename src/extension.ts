@@ -23,6 +23,9 @@ let lastPrint: { id: string; args: unknown[] } | undefined;
 let installWatch: NodeJS.Timeout | undefined;
 /** The install started from a message: its button, and when. */
 let installing: { command: string; started: number } | undefined;
+/** Windows: from an Install click until the downloaded code2pdf is found. One download at a time. */
+let downloading = false;
+const STILL_DOWNLOADING = "code2pdf is still being installed. You'll get a message here when it's ready.";
 /** Anonymous usage events (see telemetry.ts); undefined without a connection string. */
 let usage: vscode.TelemetryLogger | undefined;
 /** For telling version 1 users what changed (see upgrade.ts). */
@@ -341,18 +344,21 @@ async function offerUpdate(old: cli.Code2pdf, from: OfferedFrom): Promise<void> 
 }
 
 async function offer({ installs, message }: ReturnType<typeof howToInstall>, reason: "missing" | "tooOld", from: OfferedFrom): Promise<void> {
+  if (downloading) {
+    // A print during the download: Print Now comes when it's done
+    void show("info", STILL_DOWNLOADING);
+    return;
+  }
   const homebrew = !installs.length && process.platform === "darwin";
   const buttons = [...installs.map((i) => i.label), ...(homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
   const choice = await vscode.window.showWarningMessage(message, ...buttons);
   record("installOffered", { reason, from, offered: buttons.join(", "), choice: choice ?? "dismissed" });
   const install = installs.find((i) => i.label === choice);
-  if (install) {
+  if (install?.download) {
+    await downloadWindowsBuild(install.label);
+  } else if (install) {
     installing = { command: install.label, started: Date.now() };
-    if (install.download) {
-      await downloadWindowsBuild(install.label);
-    } else {
-      runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command ?? "", install.asks);
-    }
+    runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command ?? "", install.asks);
   } else if (choice === "Open brew.sh") {
     void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));
   } else if (choice === "Installation Guide") {
@@ -378,11 +384,25 @@ async function installOrCheck(): Promise<undefined> {
   return undefined;
 }
 
-/** Windows: downloads the Windows build (download.ts), with a cancellable progress message. */
+/**
+ * Windows: downloads the Windows build (download.ts), with a cancellable progress message. Only
+ * once: another message's Install button, clicked meanwhile or later, doesn't download it again.
+ */
 async function downloadWindowsBuild(label: string): Promise<void> {
+  if (downloading) {
+    void show("info", STILL_DOWNLOADING);
+    return;
+  }
+  if (found) {
+    // Installed since this message was shown, from another one
+    await ready(found);
+    return;
+  }
   const dir = cli.windowsInstallDir();
   log.appendLine(`\n${label}: the Windows build, into ${dir}`);
   const mb = (bytes: number) => (bytes / 1e6).toFixed(0);
+  downloading = true;
+  installing = { command: label, started: Date.now() };
   try {
     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `${label}`, cancellable: true },
       (progress, token) => {
@@ -395,9 +415,11 @@ async function downloadWindowsBuild(label: string): Promise<void> {
             progress.report({ message: total ? `${mb(received)} of ${mb(total)} MB` : `${mb(received)} MB`, increment: done - shown });
             shown = done;
           },
+          onStep: (step) => progress.report({ message: step }),
         });
       });
   } catch (error) {
+    downloading = false;
     if (error instanceof download.Cancelled) {
       log.appendLine("Stopped; nothing was changed.");
       installFinished({ outcome: "cancelled" });
@@ -415,13 +437,17 @@ async function downloadWindowsBuild(label: string): Promise<void> {
     return;
   }
   found = undefined;
+  let installed: cli.Code2pdf;
   try {
-    await ready(await lookUp());
+    installed = await lookUp();
   } catch (error) {
     // Installed, but not found where it was put, or still too old: say so the usual way
     installFinished({ outcome: "failed" });
     throw error;
+  } finally {
+    downloading = false;
   }
+  await ready(installed);
 }
 
 /** code2pdf is ready after an install: say so, and offer to run the print that needed it. */

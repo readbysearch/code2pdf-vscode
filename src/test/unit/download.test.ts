@@ -55,12 +55,18 @@ test("installs the build, checked against its SHA-256, in place of the old one",
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "old-file"), "from 3.12");
     const seen: number[] = [];
-    const version = await download.installWindowsBuild(dir, { base: s.base, onProgress: (received) => seen.push(received) });
+    const steps: string[] = [];
+    const version = await download.installWindowsBuild(dir, {
+      base: s.base,
+      onProgress: (received) => seen.push(received),
+      onStep: (step) => steps.push(step),
+    });
     assert.equal(version, "code2pdf 3.13 (commit abc, 2026-10-20)");
     assert.ok(fs.existsSync(path.join(dir, "code2pdf.exe")));
     assert.ok(!fs.existsSync(path.join(dir, "old-file")), "the old build is gone");
     assert.deepEqual(fs.readdirSync(path.dirname(dir)), ["code2pdf"], "nothing left next to it");
     assert.equal(seen[seen.length - 1], zip.length);
+    assert.deepEqual(steps, ["Unpacking…", "Checking that it runs…"], "says what it does after the download");
     assert.ok(s.hits.includes(`/cdn/${download.ZIP}`), "followed the redirect");
   } finally {
     s.close();

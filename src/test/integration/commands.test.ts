@@ -322,6 +322,71 @@ describe("code2pdf", () => {
     assert.ok(fs.existsSync(pdf), "Print Now printed the file that was asked for");
   });
 
+  // Only Windows downloads; elsewhere Install runs in a terminal
+  const windowsIt = process.platform === "win32" ? it : it.skip;
+
+  windowsIt("downloads code2pdf once, however many prints and Install buttons come meanwhile", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cliModule = require("../../cli") as { find: (setting: string) => Promise<unknown>; NotInstalled: new (l: string[], f: boolean) => Error };
+    const realFind = cliModule.find;
+    let installed = false;
+    cliModule.find = (setting: string) => (installed ? realFind(setting) : Promise.reject(new cliModule.NotInstalled(["code2pdf"], false)));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const downloadModule = require("../../download") as { installWindowsBuild: (dir: string) => Promise<string> };
+    const realDownload = downloadModule.installWindowsBuild;
+    let downloads = 0;
+    let finish = () => {};
+    downloadModule.installWindowsBuild = () => {
+      downloads++;
+      return new Promise((resolve) => {
+        finish = () => {
+          installed = true;
+          resolve("code2pdf 3.13");
+        };
+      });
+    };
+    const config = vscode.workspace.getConfiguration("code2pdf");
+    await config.update("executable", "", vscode.ConfigurationTarget.Global);
+    const clicks: ((choice: string | undefined) => void)[] = [];  // each install message's button, clicked later
+    const infos: string[] = [];
+    const until = async (what: string, done: () => boolean) => {
+      for (let i = 0; i < 100 && !done(); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      assert.ok(done(), what);
+    };
+    const print = () => vscode.commands.executeCommand("code2pdf.printFile", uri("src/util.py"));
+    try {
+      await stubbed("showWarningMessage", () => new Promise((resolve) => clicks.push(resolve)), () =>
+        stubbed("showInformationMessage", (m: string) => {
+          infos.push(m);
+          return Promise.resolve(undefined);
+        }, async () => {
+          // Three prints before any click: three install messages
+          const printing = [print(), print(), print()];
+          await until("three messages", () => clicks.length === 3);
+          clicks[0]("Install code2pdf");
+          await until("Install starts the download", () => downloads === 1);
+          await print();
+          assert.equal(clicks.length, 3, "a print during the download offers no install");
+          clicks[1]("Install code2pdf");  // another message, clicked during the download
+          await printing[1];
+          assert.equal(infos.filter((m) => /still being installed/.test(m)).length, 2, infos.join(" | "));
+          finish();
+          await printing[0];
+          clicks[2]("Install code2pdf");  // the last one, clicked after the install
+          await printing[2];
+        }));
+    } finally {
+      clicks.forEach((click) => click(undefined));  // dismiss any left, if an assertion failed
+      cliModule.find = realFind;
+      downloadModule.installWindowsBuild = realDownload;
+      await config.update("executable", undefined, vscode.ConfigurationTarget.Global);
+    }
+    assert.equal(downloads, 1, "downloaded once");
+    assert.equal(infos.filter((m) => /^code2pdf \S+ is installed\./.test(m)).length, 2, infos.join(" | "));
+  });
+
   it("the install command says when code2pdf is already installed", async () => {
     const shown = await messages(() => vscode.commands.executeCommand("code2pdf.install"));
     assert.ok(shown.some((m) => /^code2pdf \S+ is installed \(/.test(m)), shown.join(" | "));

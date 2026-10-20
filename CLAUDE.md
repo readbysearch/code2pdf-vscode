@@ -24,7 +24,9 @@ README.md only.
   release (its `.sha256` first; `$CODE2PDF_DOWNLOAD_BASE` points elsewhere for tests), unpacks it
   with Windows' own `tar.exe`, runs `code2pdf.exe --version`, then swaps the folder in:
   `cli.windowsInstallDir()`, `%LOCALAPPDATA%\Programs\code2pdf`, the same place code2pdf's README
-  tells terminal users to unzip it.
+  tells terminal users to unzip it. One download at a time (`downloading` in extension.ts): a
+  second one could reach the swap while Print Now runs code2pdf.exe, and Windows won't rename a
+  folder whose program is running ("is in use").
 - `src/telemetry.ts`: anonymous usage events for Azure Application Insights, sent through
   `vscode.env.createTelemetryLogger` (nothing when VS Code's telemetry is off or
   `code2pdf.telemetry` is false, and nothing while `CONNECTION_STRING` is empty). `EVENTS` lists every field that may be sent; the sender drops
