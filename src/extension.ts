@@ -482,7 +482,9 @@ async function downloadWindowsBuild(label: string): Promise<void> {
     }
     const message = error instanceof Error ? error.message : String(error);
     log.appendLine(`Error: ${message}`);
-    installFinished({ outcome: "failed" });
+    installFinished(error instanceof download.InstallFailed
+      ? { outcome: "failed", step: error.step, error: error.code, exitCode: error.exitCode === undefined ? undefined : String(error.exitCode) }
+      : { outcome: "failed" });
     const choice = await show("error", `code2pdf couldn't be installed: ${message}.`, "Show Output", "Installation Guide");
     if (choice === "Show Output") {
       log.show(true);
@@ -497,7 +499,7 @@ async function downloadWindowsBuild(label: string): Promise<void> {
     installed = await lookUp();
   } catch (error) {
     // Installed, but not found where it was put, or still too old: say so the usual way
-    installFinished({ outcome: "failed" });
+    installFinished({ outcome: "failed", step: "find" });
     throw error;
   } finally {
     downloading = false;

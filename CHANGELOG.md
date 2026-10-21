@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.1
+
+- Windows: when downloading code2pdf fails, the usage event says at which step (the download,
+  unpacking, running it…) and gives the error code, such as ENOTFOUND or HTTP 404, but not the
+  message, which can contain paths. Until now it said only that the install failed. The privacy
+  policy lists the new fields.
+- Windows: "is in use" is said only when the old code2pdf folder couldn't be replaced, not for
+  every permission error along the way.
+
 ## 2.2.0
 
 - PDFs open in a VS Code tab, with no other extension needed: the page you're on, zoom, and the

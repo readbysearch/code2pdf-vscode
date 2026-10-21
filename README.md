@@ -204,7 +204,8 @@ settings can't turn it back on.
 - **When it offers to install or update code2pdf:** why, the buttons it showed, and the one you
   chose.
 - **When an install it started is done**, fails or is cancelled, or after 30 minutes without
-  one: how long it took.
+  one: how long it took, and if the download on Windows failed, at which step and the error
+  code (such as ENOTFOUND or HTTP 404).
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or
   changes), whether it printed, failed or was cancelled, the pages, how long it took, and two
   settings: where PDFs go (the project's folder for them, a folder you set, or a save dialog) and

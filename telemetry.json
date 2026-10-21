@@ -33,7 +33,10 @@
       "command": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The install button chosen, such as Install with Homebrew." },
       "seconds": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "Time since the button was chosen.", "isMeasurement": true },
       "cliVersion": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "The installed code2pdf's version." },
-      "installKind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "How it was installed, as code2pdf --version says." }
+      "installKind": { "classification": "SystemMetaData", "purpose": "FeatureInsight", "comment": "How it was installed, as code2pdf --version says." },
+      "step": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "Where a Windows download failed: prepare, download, damaged (its SHA-256 didn't match), unpack, check (code2pdf.exe didn't run), swap (putting it in place), or find (installed, then not found)." },
+      "error": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "Why it failed, when known: the system error code, such as ENOTFOUND or EPERM, the HTTP status, such as HTTP 404, or timeout." },
+      "exitCode": { "classification": "SystemMetaData", "purpose": "PerformanceAndHealth", "comment": "code2pdf.exe's exit code, when the downloaded one didn't run." }
     },
     "readbysearch.code2pdf/print": {
       "owner": "readbysearch",

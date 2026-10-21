@@ -28,11 +28,20 @@ async function server(files: Record<string, Buffer | string>): Promise<{ base: s
   return { base: `http://127.0.0.1:${(s.address() as AddressInfo).port}/latest/`, close: () => s.close(), hits };
 }
 
-/** A zip like the Windows build's: code2pdf/code2pdf.exe, here a script that answers --version. */
-function zipOf(version: string): Buffer {
+/** Where the install failed, and why, as the usage event gets it. */
+function failedAt(step: download.Step, code?: string, exitCode?: number) {
+  return (e: unknown) => {
+    assert.ok(e instanceof download.InstallFailed, String(e));
+    assert.deepEqual({ step: e.step, code: e.code, exitCode: e.exitCode }, { step, code, exitCode });
+    return true;
+  };
+}
+
+/** A zip like the Windows build's: code2pdf/code2pdf.exe, here a script that answers --version (or BODY). */
+function zipOf(version: string, body = `echo "code2pdf ${version} (commit abc, 2026-10-20)"; echo "  installed: Windows build, x"`): Buffer {
   const dir = tempDir();
   fs.mkdirSync(path.join(dir, "code2pdf", "_internal"), { recursive: true });
-  script(path.join(dir, "code2pdf"), "code2pdf.exe", `echo "code2pdf ${version} (commit abc, 2026-10-20)"; echo "  installed: Windows build, x"`);
+  script(path.join(dir, "code2pdf"), "code2pdf.exe", body);
   execFileSync("tar", ["-a", "-cf", path.join(dir, "build.zip"), "-C", dir, "code2pdf"]);
   return fs.readFileSync(path.join(dir, "build.zip"));
 }
@@ -80,7 +89,9 @@ test("a damaged download changes nothing", async () => {
     const dir = path.join(tempDir(), "code2pdf");
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir, "code2pdf.exe"), "the old one");
-    await assert.rejects(download.installWindowsBuild(dir, { base: s.base }), /damaged: its SHA-256 is [0-9a-f]{64}, not 0{64}/);
+    const result = download.installWindowsBuild(dir, { base: s.base });
+    await assert.rejects(result, /damaged: its SHA-256 is [0-9a-f]{64}, not 0{64}/);
+    await assert.rejects(result, failedAt("damaged"));
     assert.equal(fs.readFileSync(path.join(dir, "code2pdf.exe"), "utf8"), "the old one");
     assert.deepEqual(fs.readdirSync(path.dirname(dir)), ["code2pdf"]);
   } finally {
@@ -91,10 +102,35 @@ test("a damaged download changes nothing", async () => {
 test("no release with the Windows build: says what answered", async () => {
   const s = await server({});
   try {
-    await assert.rejects(download.installWindowsBuild(path.join(tempDir(), "code2pdf"), { base: s.base }),
-      /the download failed: .*code2pdf-windows-x64\.zip\.sha256 answered 404/);
+    const result = download.installWindowsBuild(path.join(tempDir(), "code2pdf"), { base: s.base });
+    await assert.rejects(result, /the download failed: .*code2pdf-windows-x64\.zip\.sha256 answered 404/);
+    await assert.rejects(result, failedAt("download", "HTTP 404"));
   } finally {
     s.close();
+  }
+});
+
+test("no connection: the step and the system's error code, for the usage event", async () => {
+  const s = await server({});
+  s.close();  // nothing listens on its port now
+  await new Promise((r) => setTimeout(r, 50));
+  await assert.rejects(download.installWindowsBuild(path.join(tempDir(), "code2pdf"), { base: s.base }), failedAt("download", "ECONNREFUSED"));
+});
+
+test("a zip without code2pdf.exe, or one that doesn't run, fails at its own step", { skip: POSIX_ONLY || (!bsdtar && "needs bsdtar") }, async () => {
+  const empty = tempDir();
+  fs.writeFileSync(path.join(empty, "README.txt"), "no program here");
+  execFileSync("tar", ["-a", "-cf", path.join(empty, "build.zip"), "-C", empty, "README.txt"]);
+  const broken = zipOf("3.13", "echo 'missing DLL' >&2; exit 3");
+  for (const [zip, check] of [[fs.readFileSync(path.join(empty, "build.zip")), failedAt("unpack")], [broken, failedAt("check", undefined, 3)]] as const) {
+    const s = await server({ [download.ZIP]: zip, [`${download.ZIP}.sha256`]: sha(zip) });
+    try {
+      const dir = path.join(tempDir(), "code2pdf");
+      await assert.rejects(download.installWindowsBuild(dir, { base: s.base }), check);
+      assert.deepEqual(fs.readdirSync(path.dirname(dir)), [], "nothing left");
+    } finally {
+      s.close();
+    }
   }
 });
 

@@ -28,7 +28,9 @@ README.md only.
   `cli.windowsInstallDir()`, `%LOCALAPPDATA%\Programs\code2pdf`, the same place code2pdf's README
   tells terminal users to unzip it. One download at a time (`downloading` in extension.ts): a
   second one could reach the swap while Print Now runs code2pdf.exe, and Windows won't rename a
-  folder whose program is running ("is in use").
+  folder whose program is running ("is in use"). It throws `InstallFailed`, which says at which
+  step and with which error code (ENOTFOUND, `HTTP 404`, an exit code): the installFinished
+  event sends those, never the message, which has paths.
 - `src/telemetry.ts`: anonymous usage events for Azure Application Insights, sent through
   `vscode.env.createTelemetryLogger` (nothing when VS Code's telemetry is off or
   `code2pdf.telemetry` is false, and nothing while `CONNECTION_STRING` is empty). `EVENTS` lists every field that may be sent; the sender drops

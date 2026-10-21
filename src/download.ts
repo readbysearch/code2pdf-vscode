@@ -20,6 +20,37 @@ export class Cancelled extends Error {
   }
 }
 
+/** Where an install stopped: getting ready, the download, its SHA-256, unpacking, running it, or the swap. */
+export type Step = "prepare" | "download" | "damaged" | "unpack" | "check" | "swap";
+
+/**
+ * The install failed at STEP. For the usage event, CODE is the system error code (ENOTFOUND,
+ * EPERM…), the HTTP status ("HTTP 404") or "timeout", and EXITCODE is code2pdf.exe's exit code
+ * when it didn't run: never the message, which has paths in it.
+ */
+export class InstallFailed extends Error {
+  constructor(message: string, readonly step: Step, readonly code?: string, readonly exitCode?: number, options?: ErrorOptions) {
+    super(message, options);
+  }
+}
+
+/** The code and exit code that InstallFailed carries, from an error thrown along the way. */
+function reasonOf(error: unknown): { code?: string; exitCode?: number } {
+  const { code, killed } = (error ?? {}) as { code?: unknown; killed?: boolean };
+  if (killed) {
+    return { code: "timeout" };
+  }
+  if (typeof code === "number") {
+    return { exitCode: code };
+  }
+  return typeof code === "string" && /^(?:[A-Z][A-Z0-9_]*|HTTP \d{3})$/.test(code) ? { code } : {};
+}
+
+/** An Error with MESSAGE that keeps CAUSE's code, for reasonOf. */
+function withCode(message: string, cause: unknown, code = (cause as { code?: unknown } | undefined)?.code): Error {
+  return Object.assign(new Error(message, { cause }), { code, killed: (cause as { killed?: boolean } | undefined)?.killed });
+}
+
 export interface DownloadOptions {
   /** Where the zip and its .sha256 are: the latest release, or a test server. */
   base?: string;
@@ -43,10 +74,10 @@ function get(url: string, cancellation?: Cancellation, redirects = 5): Promise<h
         resolve(response);
       } else {
         response.resume();
-        reject(new Error(`the download failed: ${url} answered ${status}`));
+        reject(withCode(`the download failed: ${url} answered ${status}`, undefined, `HTTP ${status}`));
       }
     });
-    request.on("error", (error) => reject(error instanceof Cancelled ? error : new Error(`the download failed: ${error.message}`)));
+    request.on("error", (error) => reject(error instanceof Cancelled ? error : withCode(`the download failed: ${error.message}`, error)));
     cancellation?.onCancellationRequested(() => request.destroy(new Cancelled()));
   });
 }
@@ -89,7 +120,7 @@ async function save(url: string, file: string, options: DownloadOptions): Promis
 function run(command: string, args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(command, [...args], { timeout: 120_000, windowsHide: true }, (error, stdout, stderr) =>
-      error ? reject(new Error(`${path.basename(command)} ${args[0] ?? ""} failed: ${(stderr || error.message).trim()}`)) : resolve(stdout));
+      error ? reject(withCode(`${path.basename(command)} ${args[0] ?? ""} failed: ${(stderr || error.message).trim()}`, error)) : resolve(stdout));
   });
 }
 
@@ -122,7 +153,7 @@ function removeLeftovers(dir: string): void {
 /**
  * Installs the Windows build into DIR (code2pdf.exe goes to DIR/code2pdf.exe): downloads it,
  * checks its SHA-256 and that it runs, then puts it in place of what was there. Returns the
- * version it reports. Throws Cancelled, or an Error that says what went wrong.
+ * version it reports. Throws Cancelled, or an InstallFailed that says what went wrong and where.
  */
 export async function installWindowsBuild(dir: string, options: DownloadOptions = {}): Promise<string> {
   const base = options.base ?? process.env.CODE2PDF_DOWNLOAD_BASE ?? RELEASE;
@@ -131,22 +162,29 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
   const zip = `${dir}.download-${tag}.zip`;
   const unpacked = `${dir}.new-${tag}`;
   const old = `${dir}.old-${tag}`;
-  fs.mkdirSync(path.dirname(dir), { recursive: true });
-  removeLeftovers(dir);
+  let step: Step = "prepare";
   try {
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    removeLeftovers(dir);
     if (options.cancellation?.isCancellationRequested) {
       throw new Cancelled();
     }
-    const expected = (await text(`${base}${ZIP}.sha256`, options.cancellation)).trim().split(/\s+/)[0].toLowerCase();
+    step = "download";
+    const sums = await text(`${base}${ZIP}.sha256`, options.cancellation);
+    step = "damaged";
+    const expected = sums.trim().split(/\s+/)[0].toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(expected)) {
       throw new Error(`${ZIP}.sha256 doesn't hold a SHA-256`);
     }
     log(`Downloading ${base}${ZIP}`);
+    step = "download";
     const actual = await save(`${base}${ZIP}`, zip, options);
+    step = "damaged";
     if (actual !== expected) {
       throw new Error(`the download is damaged: its SHA-256 is ${actual}, not ${expected}`);
     }
     log(`SHA-256 ${actual}: as published. Unpacking into ${unpacked}`);
+    step = "unpack";
     options.onStep?.("Unpacking…");
     fs.mkdirSync(unpacked);
     await run(tar(), ["-xf", zip, "-C", unpacked]);
@@ -154,12 +192,14 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
     if (!fs.existsSync(exe)) {
       throw new Error(`${ZIP} has no code2pdf\\code2pdf.exe`);
     }
+    step = "check";
     options.onStep?.("Checking that it runs…");
     const version = (await run(exe, ["--version"])).split("\n")[0].trim();
     if (!version.startsWith("code2pdf ")) {
       throw new Error(`the downloaded code2pdf.exe doesn't run: ${version}`);
     }
     log(`It runs: ${version}`);
+    step = "swap";
     if (fs.existsSync(dir)) {
       fs.renameSync(dir, old);
     }
@@ -174,14 +214,16 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
     log(`Installed in ${dir}`);
     return version;
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOSPC") {
-      throw new Error(`there isn't enough free space on ${path.parse(dir).root} (it needs about 200 MB while installing)`, { cause: error });
+    if (error instanceof Cancelled) {
+      throw error;
     }
-    if (code === "EBUSY" || code === "EPERM") {
-      throw new Error(`${dir} is in use: close any code2pdf that is running, then try again`, { cause: error });
-    }
-    throw error;
+    const { code, exitCode } = reasonOf(error);
+    const message = code === "ENOSPC"
+      ? `there isn't enough free space on ${path.parse(dir).root} (it needs about 200 MB while installing)`
+      : (code === "EBUSY" || code === "EPERM") && step === "swap"
+        ? `${dir} is in use: close any code2pdf that is running, then try again`
+        : error instanceof Error ? error.message : String(error);
+    throw new InstallFailed(message, step, code, exitCode, { cause: error });
   } finally {
     for (const leftover of [zip, unpacked, old]) {
       try {

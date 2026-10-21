@@ -1,7 +1,7 @@
 # Privacy
 
 This policy covers the code2pdf extension for VS Code (`readbysearch.code2pdf`), published by
-readbysearch. Last changed on 20 October 2026, for version 2.2.0.
+readbysearch. Last changed on 21 October 2026, for version 2.2.1.
 
 ## In short
 
@@ -20,7 +20,9 @@ readbysearch. Last changed on 20 October 2026, for version 2.2.0.
 - **When it offers to install or update code2pdf:** why (missing, too old, or not where a setting says), whether a
   print or the Get Started page led to it, the buttons it showed, and the one you chose.
 - **When an install it started is done,** fails or is cancelled, or after 30 minutes without
-  one: which install, and how long it took.
+  one: which install, and how long it took. If the download on Windows failed: the step it
+  stopped at (such as the download, unpacking, or running code2pdf), and the error code, such as
+  ENOTFOUND, HTTP 404 or code2pdf's exit code, but not the error message, which can contain paths.
 - **When a print ends:** what was printed (a file, some lines, a folder, chosen files or changes),
   whether it printed, failed, was cancelled or its save dialog was closed, the number of pages
   and warnings, how long it took, code2pdf's exit code if it failed, and two settings: whether

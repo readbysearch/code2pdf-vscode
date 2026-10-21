@@ -26,7 +26,7 @@ export const EVENTS = {
   /** The install or update message was answered (or closed). */
   installOffered: ["reason", "from", "offered", "choice"],
   /** An install started from a message finished, or 30 minutes passed without one. */
-  installFinished: ["outcome", "command", "seconds", "cliVersion", "installKind"],
+  installFinished: ["outcome", "command", "seconds", "cliVersion", "installKind", "step", "error", "exitCode"],
   /** A print ended, or its save dialog was closed. */
   print: ["kind", "outcome", "saveTo", "openWith", "seconds", "pages", "warnings", "exitCode", "error"],
 } as const;

@@ -2,7 +2,7 @@
   "name": "code2pdf",
   "displayName": "code2pdf: Print Code to PDF",
   "description": "Print source code as a PDF made for reading: a contents page, syntax highlighting, real line numbers and a bookmark per file. Print a folder, chosen files, a selection, or what changed in git with the changed lines marked.",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "publisher": "readbysearch",
   "license": "MIT",
   "icon": "images/icon.png",
