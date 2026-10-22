@@ -132,7 +132,8 @@ describe("first print without code2pdf (fresh machine)", () => {
       console.log(`PDF after ${Math.round((Date.now() - started) / 1000)} s: ${fs.existsSync(pdf)}`);
       // The tap has bottles: building code2pdf from source (2-3 minutes) means one went missing
       if (terminals.ran().some((c) => /brew install readbysearch\/tap\/code2pdf/.test(c))) {
-        assert.match(terminals.output(), /Pouring code2pdf--/, "Homebrew built code2pdf from source instead of pouring the tap's bottle");
+        // "Pouring code2pdf-3.13.arm64_tahoe.bottle.1.tar.gz" (a local bottle file has "--")
+        assert.match(terminals.output(), /Pouring code2pdf-+\d\S*\.bottle\./, "Homebrew built code2pdf from source instead of pouring the tap's bottle");
       }
     } finally {
       terminals.dispose();
