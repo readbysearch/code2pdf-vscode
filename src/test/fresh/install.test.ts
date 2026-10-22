@@ -23,22 +23,26 @@ interface ShellEvents {
 /**
  * Logs every command run in a terminal, its output and exit code, and answers y to a [y/n]
  * question as the user would (Homebrew 7 asks before installing; apt asks to continue).
- * failed() says if a command failed.
+ * failed() says if a command failed; ran() lists the commands and output() what they printed.
  */
-function watchTerminals(): { failed: () => string | undefined; started: () => boolean | undefined; dispose: () => void } {
+function watchTerminals(): { failed: () => string | undefined; started: () => boolean | undefined; ran: () => string[]; output: () => string; dispose: () => void } {
   const events = vscode.window as unknown as ShellEvents;
   const subscriptions: vscode.Disposable[] = [];
   let failure: string | undefined;
   let started = false;
+  const commands: string[] = [];
+  let output = "";
   if (events.onDidStartTerminalShellExecution) {
     subscriptions.push(events.onDidStartTerminalShellExecution(async ({ terminal, execution }) => {
       started = true;
+      commands.push(execution.commandLine.value);
       console.log(`[terminal] $ ${execution.commandLine.value}`);
       let tail = "";
       for await (const data of execution.read()) {
         // eslint-disable-next-line no-control-regex
         const text = data.replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g, "");
         process.stdout.write(text);
+        output += text;
         tail = (tail + text).slice(-300);
         if (/\[(y\/n|Y\/n|y\/N)\]\s*$/.test(tail)) {
           console.log("\n[terminal] (the test types y, as the user would)");
@@ -62,6 +66,8 @@ function watchTerminals(): { failed: () => string | undefined; started: () => bo
     failed: () => failure,
     /** Whether a command started; undefined without shell integration events (can't tell). */
     started: () => (events.onDidStartTerminalShellExecution ? started : undefined),
+    ran: () => commands,
+    output: () => output,
     dispose: () => subscriptions.forEach((d) => d.dispose()),
   };
 }
@@ -124,6 +130,10 @@ describe("first print without code2pdf (fresh machine)", () => {
       }
       assert.equal(terminals.failed(), undefined, "the install command failed");
       console.log(`PDF after ${Math.round((Date.now() - started) / 1000)} s: ${fs.existsSync(pdf)}`);
+      // The tap has bottles: building code2pdf from source (2-3 minutes) means one went missing
+      if (terminals.ran().some((c) => /brew install readbysearch\/tap\/code2pdf/.test(c))) {
+        assert.match(terminals.output(), /Pouring code2pdf--/, "Homebrew built code2pdf from source instead of pouring the tap's bottle");
+      }
     } finally {
       terminals.dispose();
       window.showWarningMessage = original.warning;
