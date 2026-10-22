@@ -32,5 +32,5 @@ echo "== $(. /etc/os-release; echo "$PRETTY_NAME"), $(uname -m)"
 for c in code2pdf curl git wget python3; do printf "  %-8s %s\n" "$c" "$(command -v "$c" || echo missing)"; done
 su - tester -c 'set -o pipefail; export CODE2PDF_TEST_CLICK="'"${CODE2PDF_TEST_CLICK:-}"'"; cd ~/ext && npm ci --no-audit --no-fund --loglevel=error >/dev/null && npx tsc -p . &&
   CODE2PDF_TEST_FILES="out/test/fresh/*.test.js" CODE2PDF_TEST_NO_SANDBOX=1 xvfb-run -a npx vscode-test 2>&1 |
-  grep -E "^\[(warning|info|terminal)\]|^…|Clicked|PDF after|passing|failing|Error|^\s+[0-9]+\) |✔|✗"'
+  grep -E "^\[(warning|info|terminal)\]|^…|Clicked|PDF after|passing|failing|Error|^\s+[0-9]+\) |✔|✗|Do you want|^E: |Abort|Failed to fetch|Unable to|^Setting up code2pdf"'
 echo "== code2pdf now: $(su - tester -c 'command -v code2pdf || ls ~/.local/bin/code2pdf' 2>/dev/null || echo missing)"
