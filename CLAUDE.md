@@ -123,8 +123,10 @@ re-creates `code2pdf-vscode`, whose connection string the extension ships.
 `test/fresh-machine.sh` makes a container look like a fresh Ubuntu desktop (wget and python3;
 no curl, git or code2pdf) and runs `src/test/fresh/`: the real install command runs in VS
 Code's terminal (24.04: the .deb; 22.04: install.sh), then Print Now must print. Only the two
-clicks are stubbed. CI's `fresh` job runs it on both, on a macOS runner (Homebrew, no
-code2pdf), and on a Windows runner (the Install button downloads the Windows build).
+clicks are stubbed. The "Fresh machine" workflow runs it on both Ubuntus with and without sudo,
+on a macOS runner (Homebrew, no code2pdf: the install must pour the tap's bottle, a pre-built
+code2pdf, so a lost bottle is noticed) and on a Windows runner (the Install button downloads the
+Windows build).
 
 `.vscode-test.mjs` builds the fixture project (a git repo with two commits and an uncommitted
 edit) and points `code2pdf.outputFolder` outside it. Integration tests stub `vscode.window`

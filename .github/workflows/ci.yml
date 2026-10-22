@@ -39,7 +39,10 @@ jobs:
           sudo apt-get install -y -qq /tmp/code2pdf_all.deb poppler-utils xvfb
       - name: Install code2pdf (Homebrew)
         if: runner.os == 'macOS'
-        run: brew install readbysearch/tap/code2pdf poppler
+        run: |
+          brew install readbysearch/tap/code2pdf poppler
+          # The tap has bottles: building from source (2-3 minutes) would mean this macOS lost its
+          brew info --json=v2 readbysearch/tap/code2pdf | jq -e '.formulae[0].installed[0].poured_from_bottle'
       - name: Install code2pdf (Windows build, as the README says), and pdftotext from MSYS2
         if: runner.os == 'Windows'
         run: |
