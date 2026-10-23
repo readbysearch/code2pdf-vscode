@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2.2
+
+- A folder print that finds nothing now says why: code2pdf's default selection skips data, text
+  and image files and hidden, build and dependency folders. The message says how to print them
+  anyway (select the files in the Explorer, or the `code2pdf.include` setting) and opens the
+  setting. This was the commonest failed print in the usage data.
+- Windows: the download is tried once more when the connection drops, and fails after 30 seconds
+  without data instead of waiting forever, which left Install unusable until VS Code restarted.
+- Windows: putting the new code2pdf in place is retried for a few seconds when the folder is
+  locked, as it is while antivirus scans what was just unpacked.
+- Windows: code2pdf.exe gets 5 minutes, not 2, to answer `--version` after the download, and is
+  installed even if it doesn't: the SHA-256 says the files are right, and security software can
+  hold a new program's first start. If it still doesn't start, the message says so and suggests
+  trying again in a few minutes, instead of calling it too old.
+
 ## 2.2.1
 
 - Windows: when downloading code2pdf fails, the usage event says at which step (the download,

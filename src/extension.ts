@@ -63,6 +63,8 @@ interface Job {
   /** For `--files-from -`. */
   input?: string;
   output: string;
+  /** The folder printed with code2pdf's own selection, when it is one. */
+  folder?: string;
 }
 
 /** Thrown to stop a command with a message for the user (none when they cancelled). */
@@ -217,6 +219,19 @@ async function showWithOutput(level: "error" | "warning" | "info", message: stri
   }
 }
 
+/** code2pdf found nothing it prints by default in FOLDER: what it skips, and the two ways around that. */
+async function explainNoFiles(folder: string): Promise<void> {
+  const name = path.basename(folder) || folder;
+  const choice = await show("warning",
+    `code2pdf found nothing it prints by default in ${name}: it skips data, text and image files, and hidden, build and dependency folders. To print them anyway, select the files in the Explorer and choose Print to PDF, or add their types to the code2pdf.include setting.`,
+    "Open Settings", "Show Output");
+  if (choice === "Open Settings") {
+    void vscode.commands.executeCommand("workbench.action.openSettings", "code2pdf.include");
+  } else if (choice === "Show Output") {
+    log.show(true);
+  }
+}
+
 // Settings
 
 function settings(scope?: vscode.Uri) {
@@ -262,6 +277,11 @@ async function code2pdf(from: OfferedFrom = "print"): Promise<cli.Code2pdf | und
     }
     if (error instanceof cli.TooOld) {
       await offerUpdate(error.found, from);
+      return undefined;
+    }
+    if (error instanceof cli.Unresponsive) {
+      log.appendLine(`Error: ${error.message}`);
+      void showWithOutput("error", `${error.command} didn't start within ${error.seconds} seconds. Security software sometimes inspects a new program on its first starts: try again in a few minutes.`);
       return undefined;
     }
     throw error;
@@ -432,6 +452,9 @@ async function installOrCheck(): Promise<undefined> {
       await offerInstall(error, "installCommand");
     } else if (error instanceof cli.TooOld) {
       await offerUpdate(error.found, "installCommand");
+    } else if (error instanceof cli.Unresponsive) {
+      log.appendLine(`Error: ${error.message}`);
+      void showWithOutput("error", `${error.command} is there but didn't start within ${error.seconds} seconds. Security software sometimes inspects a new program on its first starts: try again in a few minutes.`);
     } else {
       throw error;
     }
@@ -498,6 +521,13 @@ async function downloadWindowsBuild(label: string): Promise<void> {
   try {
     installed = await lookUp();
   } catch (error) {
+    if (error instanceof cli.Unresponsive) {
+      // Installed, but it didn't answer in time, here nor during the install's check
+      installFinished({ outcome: "failed", step: "check", error: "timeout" });
+      log.appendLine(`Error: ${error.message}`);
+      void showWithOutput("warning", `code2pdf is installed in ${dir}, but it didn't start within ${error.seconds} seconds. Security software sometimes inspects a new program on its first starts: try printing again in a few minutes.`);
+      return;
+    }
     // Installed, but not found where it was put, or still too old: say so the usual way
     installFinished({ outcome: "failed", step: "find" });
     throw error;
@@ -758,7 +788,7 @@ async function printFolder(folder: vscode.Uri): Promise<string | undefined> {
   if (!output) {
     return undefined;
   }
-  return execute({ kind: "folder", title: `Printing ${rel === "." ? path.basename(root) : rel}`, cwd: root, args: args.folderArgs(rel, output, settings(folder).print), output });
+  return execute({ kind: "folder", title: `Printing ${rel === "." ? path.basename(root) : rel}`, cwd: root, args: args.folderArgs(rel, output, settings(folder).print), output, folder: folder.fsPath });
 }
 
 /** The files code2pdf would print from FOLDER (relative to it), with the include and exclude settings. */
@@ -995,7 +1025,14 @@ async function execute(job: Job): Promise<string | undefined> {
   if (result.code !== 0) {
     ended("failed", { exitCode: String(result.code) });
     forgetFound();  // it may be broken (a missing DLL, say): check it again before the next print
-    void showWithOutput("error", `code2pdf: ${result.reader.errorMessage() ?? `stopped with exit code ${result.code}`}`);
+    const reason = result.reader.errorMessage() ?? `stopped with exit code ${result.code}`;
+    if (job.folder && /no matching files/.test(reason)) {
+      // The commonest failed print in the usage data: a folder of notes, data or images, which
+      // code2pdf's default selection leaves out. Say what it skips and how to print them anyway.
+      void explainNoFiles(job.folder);
+    } else {
+      void showWithOutput("error", `code2pdf: ${reason}`);
+    }
     return undefined;
   }
   if (!fs.existsSync(job.output)) {

@@ -28,7 +28,9 @@ README.md only.
   `cli.windowsInstallDir()`, `%LOCALAPPDATA%\Programs\code2pdf`, the same place code2pdf's README
   tells terminal users to unzip it. One download at a time (`downloading` in extension.ts): a
   second one could reach the swap while Print Now runs code2pdf.exe, and Windows won't rename a
-  folder whose program is running ("is in use"). It throws `InstallFailed`, which says at which
+  folder whose program is running ("is in use"); the swap is retried for some seconds while the
+  folder is locked (antivirus scanning the new files), and a download is retried once after a
+  network error and fails after 30 s without data. It throws `InstallFailed`, which says at which
   step and with which error code (ENOTFOUND, `HTTP 404`, an exit code): the installFinished
   event sends those, never the message, which has paths.
 - `src/telemetry.ts`: anonymous usage events for Azure Application Insights, sent through
@@ -82,7 +84,10 @@ README.md only.
   by unit tests, and against Azure by `test/usage-data.sh` before each release.
 - On Windows, code2pdf is code2pdf's Windows build (`code2pdf.exe`, 3.13 and later). The
   extension downloads only from code2pdf's GitHub release, checks the published SHA-256 and that
-  it runs before replacing anything, and needs no administrator rights. A Windows build that
+  it runs before replacing anything, and needs no administrator rights. A code2pdf.exe that
+  doesn't answer `--version` within 5 minutes is installed all the same (the SHA-256 vouches for
+  it; security software can hold a new program's first start), and a lookup that times out says
+  so (`cli.Unresponsive`) rather than calling it too old. A Windows build that
   isn't in `windowsInstallDir()` was unzipped by hand: it's never updated from here.
 - Untrusted workspaces aren't supported: code2pdf runs git, and a repository's git config can
   run programs.

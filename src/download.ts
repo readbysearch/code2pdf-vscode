@@ -59,17 +59,32 @@ export interface DownloadOptions {
   onStep?: (step: string) => void;
   cancellation?: Cancellation;
   log?: (line: string) => void;
+  /** How long code2pdf.exe gets to answer --version; it's installed anyway if it doesn't. 5 minutes. */
+  checkTimeout?: number;
+  /** How long a download may go without data before it fails (ETIMEDOUT). 30 s. */
+  stallTimeout?: number;
+  /** The wait before a download is tried again, or a locked folder renamed again. 2 s and 1 s. */
+  retryDelay?: number;
 }
 
+const CHECK_TIMEOUT = 300_000;
+const STALL_TIMEOUT = 30_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const stalled = (ms: number) => withCode(`the download stalled: nothing arrived for ${Math.round(ms / 1000)} s`, undefined, "ETIMEDOUT");
+
 /** GETs URL, following redirects (GitHub sends release downloads elsewhere). */
-function get(url: string, cancellation?: Cancellation, redirects = 5): Promise<http.IncomingMessage> {
+function get(url: string, options: DownloadOptions, redirects = 5): Promise<http.IncomingMessage> {
+  const stall = options.stallTimeout ?? STALL_TIMEOUT;
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https:") ? https : http;
     const request = client.get(url, { headers: { "User-Agent": "code2pdf-vscode" } }, (response) => {
+      request.setTimeout(0);  // the body has its own watch (watchStall)
       const status = response.statusCode ?? 0;
       if (status >= 300 && status < 400 && response.headers.location && redirects > 0) {
         response.resume();
-        resolve(get(new URL(response.headers.location, url).toString(), cancellation, redirects - 1));
+        resolve(get(new URL(response.headers.location, url).toString(), options, redirects - 1));
       } else if (status === 200) {
         resolve(response);
       } else {
@@ -77,13 +92,27 @@ function get(url: string, cancellation?: Cancellation, redirects = 5): Promise<h
         reject(withCode(`the download failed: ${url} answered ${status}`, undefined, `HTTP ${status}`));
       }
     });
+    // Until the answer's headers arrive; a connection that goes silent would otherwise wait forever
+    request.setTimeout(stall, () => request.destroy(stalled(stall)));
     request.on("error", (error) => reject(error instanceof Cancelled ? error : withCode(`the download failed: ${error.message}`, error)));
-    cancellation?.onCancellationRequested(() => request.destroy(new Cancelled()));
+    options.cancellation?.onCancellationRequested(() => request.destroy(new Cancelled()));
   });
 }
 
-async function text(url: string, cancellation?: Cancellation): Promise<string> {
-  const response = await get(url, cancellation);
+/** Fails RESPONSE with ETIMEDOUT when no data arrives for a while. */
+function watchStall(response: http.IncomingMessage, options: DownloadOptions): void {
+  const stall = options.stallTimeout ?? STALL_TIMEOUT;
+  let timer = setTimeout(() => response.destroy(stalled(stall)), stall);
+  response.on("data", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => response.destroy(stalled(stall)), stall);
+  });
+  response.on("close", () => clearTimeout(timer));
+}
+
+async function text(url: string, options: DownloadOptions): Promise<string> {
+  const response = await get(url, options);
+  watchStall(response, options);
   let body = "";
   response.setEncoding("utf8");
   for await (const chunk of response) {
@@ -94,7 +123,8 @@ async function text(url: string, cancellation?: Cancellation): Promise<string> {
 
 /** Saves URL to FILE and returns its SHA-256. */
 async function save(url: string, file: string, options: DownloadOptions): Promise<string> {
-  const response = await get(url, options.cancellation);
+  const response = await get(url, options);
+  watchStall(response, options);
   const total = Number(response.headers["content-length"]) || undefined;
   const hash = createHash("sha256");
   const out = fs.createWriteStream(file);
@@ -112,14 +142,59 @@ async function save(url: string, file: string, options: DownloadOptions): Promis
     response.pipe(out);
   });
   if (total !== undefined && received !== total) {
-    throw new Error(`the download stopped after ${received} of ${total} bytes`);
+    throw withCode(`the download stopped after ${received} of ${total} bytes`, undefined, "ECONNRESET");
   }
   return hash.digest("hex");
 }
 
-function run(command: string, args: readonly string[]): Promise<string> {
+/**
+ * WHAT, and once more if the network let it down: a connection that dropped or stalled, not a
+ * server's answer (HTTP 404) or a cancel. The usage data saw a download end in ECONNRESET and
+ * work on the next try.
+ */
+async function retrying<T>(what: () => Promise<T>, options: DownloadOptions, log: (line: string) => void): Promise<T> {
+  try {
+    return await what();
+  } catch (error) {
+    const code = (error as { code?: unknown }).code;
+    if (error instanceof Cancelled || (typeof code === "string" && code.startsWith("HTTP "))) {
+      throw error;
+    }
+    log(`${error instanceof Error ? error.message : String(error)}; trying once more`);
+    await sleep(options.retryDelay ?? 2000);
+    if (options.cancellation?.isCancellationRequested) {
+      throw new Cancelled();
+    }
+    return await what();
+  }
+}
+
+/**
+ * Renames FROM to TO, trying again for some seconds when Windows says the folder is locked
+ * (EPERM, EBUSY, EACCES): antivirus often still has what was just unpacked open. The usage data
+ * saw a first install fail at the swap with EPERM and work five minutes later.
+ */
+async function rename(from: string, to: string, options: DownloadOptions, log: (line: string) => void): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (attempt >= 10 || !["EPERM", "EBUSY", "EACCES"].includes(code)) {
+        throw error;
+      }
+      if (attempt === 1) {
+        log(`${code} renaming ${path.basename(from)}: trying again for a few seconds`);
+      }
+      await sleep(options.retryDelay ?? 1000);
+    }
+  }
+}
+
+function run(command: string, args: readonly string[], timeout = 120_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(command, [...args], { timeout: 120_000, windowsHide: true }, (error, stdout, stderr) =>
+    execFile(command, [...args], { timeout, windowsHide: true }, (error, stdout, stderr) =>
       error ? reject(withCode(`${path.basename(command)} ${args[0] ?? ""} failed: ${(stderr || error.message).trim()}`, error)) : resolve(stdout));
   });
 }
@@ -153,9 +228,12 @@ function removeLeftovers(dir: string): void {
 /**
  * Installs the Windows build into DIR (code2pdf.exe goes to DIR/code2pdf.exe): downloads it,
  * checks its SHA-256 and that it runs, then puts it in place of what was there. Returns the
- * version it reports. Throws Cancelled, or an InstallFailed that says what went wrong and where.
+ * version it reports, or undefined when it didn't answer within checkTimeout: it's installed
+ * all the same, since the SHA-256 says the files are right, and security software can hold a
+ * new program's first start for minutes (the usage data saw a check time out twice on one PC).
+ * Throws Cancelled, or an InstallFailed that says what went wrong and where.
  */
-export async function installWindowsBuild(dir: string, options: DownloadOptions = {}): Promise<string> {
+export async function installWindowsBuild(dir: string, options: DownloadOptions = {}): Promise<string | undefined> {
   const base = options.base ?? process.env.CODE2PDF_DOWNLOAD_BASE ?? RELEASE;
   const log = options.log ?? (() => {});
   const tag = randomBytes(4).toString("hex");
@@ -170,7 +248,7 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
       throw new Cancelled();
     }
     step = "download";
-    const sums = await text(`${base}${ZIP}.sha256`, options.cancellation);
+    const sums = await retrying(() => text(`${base}${ZIP}.sha256`, options), options, log);
     step = "damaged";
     const expected = sums.trim().split(/\s+/)[0].toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(expected)) {
@@ -178,7 +256,7 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
     }
     log(`Downloading ${base}${ZIP}`);
     step = "download";
-    const actual = await save(`${base}${ZIP}`, zip, options);
+    const actual = await retrying(() => save(`${base}${ZIP}`, zip, options), options, log);
     step = "damaged";
     if (actual !== expected) {
       throw new Error(`the download is damaged: its SHA-256 is ${actual}, not ${expected}`);
@@ -194,20 +272,34 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
     }
     step = "check";
     options.onStep?.("Checking that it runs…");
-    const version = (await run(exe, ["--version"])).split("\n")[0].trim();
-    if (!version.startsWith("code2pdf ")) {
+    const checkTimeout = options.checkTimeout ?? CHECK_TIMEOUT;
+    const slow = setTimeout(() => options.onStep?.("Checking that it runs… (a new program's first start can take minutes when security software inspects it)"), 20_000);
+    let version: string | undefined;
+    try {
+      version = (await run(exe, ["--version"], checkTimeout)).split("\n")[0].trim();
+    } catch (error) {
+      if (!(error as { killed?: boolean }).killed) {
+        throw error;
+      }
+      log(`code2pdf.exe didn't answer --version within ${Math.round(checkTimeout / 60_000)} minutes. Installing it anyway: the SHA-256 says the files are right, and security software can hold a new program's first start.`);
+    } finally {
+      clearTimeout(slow);
+    }
+    if (version !== undefined && !version.startsWith("code2pdf ")) {
       throw new Error(`the downloaded code2pdf.exe doesn't run: ${version}`);
     }
-    log(`It runs: ${version}`);
+    if (version !== undefined) {
+      log(`It runs: ${version}`);
+    }
     step = "swap";
     if (fs.existsSync(dir)) {
-      fs.renameSync(dir, old);
+      await rename(dir, old, options, log);
     }
     try {
-      fs.renameSync(path.join(unpacked, "code2pdf"), dir);
+      await rename(path.join(unpacked, "code2pdf"), dir, options, log);
     } catch (error) {
       if (fs.existsSync(old)) {
-        fs.renameSync(old, dir);
+        await rename(old, dir, options, log);
       }
       throw error;
     }

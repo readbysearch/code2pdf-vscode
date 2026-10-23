@@ -33,6 +33,16 @@ export class TooOld extends Error {
   }
 }
 
+/**
+ * A code2pdf that is there but didn't answer --version in time. On Windows, security software
+ * can hold a new program's first starts for minutes.
+ */
+export class Unresponsive extends Error {
+  constructor(readonly command: string, readonly seconds: number) {
+    super(`${command} didn't answer --version within ${seconds} seconds`);
+  }
+}
+
 /** Version and install details from `code2pdf --version` output. */
 export function parseVersion(output: string): Omit<Code2pdf, "command"> | undefined {
   const first = output.match(/^code2pdf (\S+)/m);
@@ -91,13 +101,15 @@ export function candidates(setting: string, home = os.homedir(), platform = proc
   ];
 }
 
-/** `COMMAND --version` output, or undefined if COMMAND can't be run. */
-function versionOutput(command: string): Promise<string | undefined> {
-  return new Promise((resolve) => {
-    execFile(command, ["--version"], { timeout: 60_000 }, (error, stdout, stderr) => {
+/** `COMMAND --version` output, or undefined if COMMAND can't be run; Unresponsive if it didn't answer in time. */
+function versionOutput(command: string, timeout: number): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    execFile(command, ["--version"], { timeout }, (error, stdout, stderr) => {
       const code = (error as NodeJS.ErrnoException | null)?.code;
       if (code === "ENOENT" || code === "EACCES" || code === "ENOTDIR") {
         resolve(undefined);
+      } else if (error?.killed) {
+        reject(new Unresponsive(command, Math.round(timeout / 1000)));
       } else {
         resolve(`${stdout}\n${stderr}`);
       }
@@ -143,19 +155,19 @@ function sizeAndTime(file: string): { size: number; mtimeMs: number } | undefine
 }
 
 /**
- * Finds code2pdf, or throws NotInstalled or TooOld. On Windows, with a CACHE, what code2pdf.exe's
- * --version said last time stands while the file has the same size and time: it can take
- * seconds to start there. (Elsewhere it takes a moment, and an apt or Homebrew upgrade may keep
- * a launcher script's size and time.)
+ * Finds code2pdf, or throws NotInstalled, TooOld or Unresponsive. On Windows, with a CACHE, what
+ * code2pdf.exe's --version said last time stands while the file has the same size and time: it
+ * can take seconds to start there. (Elsewhere it takes a moment, and an apt or Homebrew upgrade
+ * may keep a launcher script's size and time.)
  */
-export async function find(setting: string, cache?: VersionCache, platform = process.platform): Promise<Code2pdf> {
+export async function find(setting: string, cache?: VersionCache, platform = process.platform, versionTimeout = 60_000): Promise<Code2pdf> {
   const looked = candidates(setting, os.homedir(), platform);
   for (const command of looked) {
     const file = cache && platform === "win32" ? windowsProgram(command) : undefined;
     const now = file ? sizeAndTime(file) : undefined;
     const seen = file && now ? cache?.get(file) : undefined;
     const known = seen && now && seen.size === now.size && seen.mtimeMs === now.mtimeMs ? seen.output : undefined;
-    const output = known ?? await versionOutput(command);
+    const output = known ?? await versionOutput(command, versionTimeout);
     if (output === undefined) {
       continue;
     }

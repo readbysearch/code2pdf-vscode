@@ -577,4 +577,21 @@ describe("code2pdf", () => {
     });
     assert.ok(shown.some((m) => m.includes("isn't in a git repository")), shown.join(" | "));
   });
+
+  it("a folder with nothing code2pdf prints by default: says what it skips and how to print them anyway", async () => {
+    const notes = path.join(project(), "notes-only");
+    fs.mkdirSync(notes, { recursive: true });
+    fs.writeFileSync(path.join(notes, "todo.txt"), "buy milk\n");
+    try {
+      const shown = await messages(async () => {
+        assert.equal(await vscode.commands.executeCommand("code2pdf.print", vscode.Uri.file(notes)), undefined, "nothing printed");
+      });
+      const explanation = shown.find((m) => /found nothing it prints by default in notes-only/.test(m));
+      assert.ok(explanation, `explains it: ${shown.join(" | ")}`);
+      assert.match(explanation, /select the files in the Explorer/);
+      assert.match(explanation, /code2pdf\.include/);
+    } finally {
+      fs.rmSync(notes, { recursive: true, force: true });
+    }
+  });
 });

@@ -169,3 +169,9 @@ test("on Windows, cancel ends code2pdf and the processes it started", { skip: pr
 test("run rejects when the command doesn't exist", async () => {
   await assert.rejects(cli.run("/nonexistent/code2pdf", { cwd: "/", args: [] }), /ENOENT/);
 });
+
+test("find: a code2pdf that doesn't answer in time is Unresponsive, not too old", { skip: POSIX_ONLY }, async () => {
+  const dir = tempDir();
+  const slow = script(dir, "slow", `sleep 3; echo "code2pdf 3.13 (commit x, 2026-10-20)"`);
+  await assert.rejects(cli.find(slow, undefined, process.platform, 500), (e: unknown) => e instanceof cli.Unresponsive && e.command === slow && e.seconds === 1);
+});
