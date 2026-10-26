@@ -85,7 +85,9 @@ const windowsBuild = (verb: "Install" | "Update"): InstallCommand => ({
  */
 export function installCommands(platform: NodeJS.Platform, hasBrew: boolean, release?: OsRelease): InstallCommand[] {
   if (platform === "darwin") {
-    return hasBrew ? [brew("install")] : [];
+    // Without Homebrew, code2pdf's installer gets Python, WeasyPrint and Pango from conda-forge:
+    // no sudo, and nothing for Gatekeeper to object to. A third of Mac sessions had no Homebrew.
+    return hasBrew ? [brew("install")] : [installScript("Install", "--user")];
   }
   if (platform === "win32") {
     return [windowsBuild("Install")];

@@ -21,7 +21,9 @@ README.md only.
 - `src/progress.ts`: reads code2pdf's stderr (`[2/3] … (50%)`, `Done: N pages`, `Warning:`,
   `Note:`, `Error:`); `-s` reports on stdout.
 - `src/install.ts`: install and update commands per platform and install kind. On Windows the
-  "command" is a download (`download: true`), not a terminal.
+  "command" is a download (`download: true`), not a terminal. On macOS without Homebrew it's
+  code2pdf's `install.sh --user`, which gets Python, WeasyPrint and Pango from conda-forge
+  (nothing for Gatekeeper to block: curl's downloads carry no quarantine flag).
 - `src/download.ts`: Windows. Downloads `code2pdf-windows-x64.zip` from code2pdf's latest
   release (its `.sha256` first; `$CODE2PDF_DOWNLOAD_BASE` points elsewhere for tests), unpacks it
   with Windows' own `tar.exe`, runs `code2pdf.exe --version`, then swaps the folder in:

@@ -314,7 +314,11 @@ export async function installWindowsBuild(dir: string, options: DownloadOptions 
       ? `there isn't enough free space on ${path.parse(dir).root} (it needs about 200 MB while installing)`
       : (code === "EBUSY" || code === "EPERM") && step === "swap"
         ? `${dir} is in use: close any code2pdf that is running, then try again`
-        : error instanceof Error ? error.message : String(error);
+        // Windows gave an error Node has no name for (UNKNOWN): "contains a virus or potentially
+        // unwanted software", or a policy that blocks programs; both seen in the usage data
+        : (code === "UNKNOWN" || code === "EACCES") && step === "check"
+          ? `Windows didn't let code2pdf.exe run (${code}): antivirus or a security policy blocked it. It's code2pdf's published build, checked against its SHA-256; if you can allow it, try again`
+          : error instanceof Error ? error.message : String(error);
     throw new InstallFailed(message, step, code, exitCode, { cause: error });
   } finally {
     for (const leftover of [zip, unpacked, old]) {

@@ -22,7 +22,7 @@ test("os-release", () => {
 
 test("install: Homebrew where there is one, else the .deb, else install.sh without sudo", () => {
   assert.equal(installCommand("darwin", true)?.command, "brew install readbysearch/tap/code2pdf");
-  assert.equal(installCommand("darwin", false), undefined, "the guide explains Homebrew");
+  assert.match(installCommand("darwin", false)?.command ?? "", /\| bash -s -- --user'$/, "without Homebrew: code2pdf's installer, just for this user");
   assert.equal(installCommand("linux", true, parseOsRelease(UBUNTU_24))?.label, "Install with Homebrew");
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.command ?? "", /sudo apt install \/tmp\/code2pdf_all\.deb'$/);
   assert.match(installCommand("linux", false, { id: "ubuntu", versionId: "22.04" })?.command ?? "", /\| bash -s -- --user'$/);
@@ -35,6 +35,7 @@ test("install: Homebrew where there is one, else the .deb, else install.sh witho
   assert.deepEqual(labels("linux", false, { id: "fedora", versionId: "41" }), ["Install for Me (no sudo)", "Install for All Users (sudo)"]);
   assert.match(installCommands("linux", false)[1].command ?? "", /bash -s -- --system'$/);
   assert.deepEqual(labels("darwin", true), ["Install with Homebrew"]);
+  assert.deepEqual(labels("darwin", false), ["Install for Me (no sudo)"]);
   assert.match(installCommand("darwin", true)?.asks ?? "", /type y in the terminal/, "Homebrew 7 asks before installing");
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.asks ?? "", /password/);
 });

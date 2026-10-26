@@ -27,9 +27,10 @@ code2pdf for Windows (about 40 MB) from its GitHub release into
 administrator rights. When code2pdf is ready, VS Code says so, with **Print Now** if you were
 printing.
 
-**By hand,** in a terminal. On macOS, Homebrew needs no sudo. On Linux, install code2pdf for
-everyone on the machine, which needs sudo, or just for yourself, which doesn't (also the way to go
-where you can't use sudo, such as a shared server). On Windows, no administrator rights are needed.
+**By hand,** in a terminal. On macOS, Homebrew needs no sudo, and without Homebrew the no-sudo
+installer below works on a Mac too. On Linux, install code2pdf for everyone on the machine, which
+needs sudo, or just for yourself, which doesn't (also the way to go where you can't use sudo, such
+as a shared server). On Windows, no administrator rights are needed.
 
 - macOS, or Linux with Homebrew:
 
@@ -51,10 +52,12 @@ where you can't use sudo, such as a shared server). On Windows, no administrator
     wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --system
     ```
 
-- Linux, just for you (no sudo), on any Linux: install into `~/.local`.
+- Just for you (no sudo), on any Linux or on a Mac without Homebrew: install into `~/.local`.
+  Where the system can't run WeasyPrint, it gets Python, WeasyPrint and Pango from conda-forge.
 
   ```bash
-  wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --user
+  wget -qO- https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --user   # Linux
+  curl -fsSL https://raw.githubusercontent.com/readbysearch/code2pdf/main/install.sh | bash -s -- --user  # macOS
   ```
 
 - Windows, in PowerShell: unzip code2pdf for Windows into `%LOCALAPPDATA%\Programs`, where the

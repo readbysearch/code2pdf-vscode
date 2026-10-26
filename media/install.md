@@ -5,7 +5,7 @@ installs it in a terminal, where you see the command and can answer its prompts:
 
 | System | For all users (sudo) | Just for you (no sudo) |
 | --- | --- | --- |
-| macOS, or Linux with Homebrew | `brew install readbysearch/tap/code2pdf` (no sudo needed) | |
+| macOS, or Linux with Homebrew | `brew install readbysearch/tap/code2pdf` (no sudo needed) | without Homebrew, on a Mac: `install.sh --user` (from conda-forge) |
 | Ubuntu 24.04+, Debian 13+ | the `.deb` from GitHub, with `sudo apt install` | `install.sh --user` |
 | Other Linux | `install.sh --system` | `install.sh --user` |
 

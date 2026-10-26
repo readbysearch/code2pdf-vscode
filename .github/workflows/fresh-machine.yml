@@ -20,6 +20,7 @@ jobs:
       matrix:
         include:
           - { name: "macOS, Homebrew", os: macos-latest }
+          - { name: "macOS, no Homebrew", os: macos-latest, click: "Install for Me", hide_brew: true }
           - { name: "Windows, download", os: windows-latest }
           - { name: "Ubuntu 24.04, apt (sudo)", os: ubuntu-latest, image: "ubuntu:24.04", click: "Install with apt" }
           - { name: "Ubuntu 24.04, for me (no sudo)", os: ubuntu-latest, image: "ubuntu:24.04", click: "Install for Me" }
@@ -37,12 +38,16 @@ jobs:
         if: runner.os != 'Linux'
         with:
           node-version: 22
-      - name: The runner has Homebrew but not code2pdf
+      - name: The runner has no code2pdf; with Homebrew, or with it hidden (a Mac without one)
         if: runner.os == 'macOS'
+        env:
+          CODE2PDF_TEST_CLICK: ${{ matrix.click }}
         run: |
           brew install poppler
           npm ci
           npx tsc -p .
+          # Hiding only the brew program keeps poppler's pdftotext, which the test reads PDFs with
+          if [ "${{ matrix.hide_brew }}" = true ]; then sudo mv /opt/homebrew/bin/brew /opt/homebrew/bin/brew.hidden; fi
           CODE2PDF_TEST_FILES='out/test/fresh/*.test.js' npx vscode-test || {
             echo "== Homebrew after the test"; brew list --versions code2pdf || true; ls -la /opt/homebrew/bin/code2pdf || true
             ls -lt ~/Library/Logs/Homebrew 2>/dev/null | head; exit 1; }

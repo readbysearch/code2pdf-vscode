@@ -382,11 +382,11 @@ function howToInstall(old?: cli.Code2pdf): { installs: InstallCommand[]; message
   if (installs[0]?.download) {
     return { installs, message: `${intro} ${installs[0].label} ${installs[0].how}.` };
   }
+  if (process.platform === "darwin" && installs.length && !installs[0].label.includes("Homebrew")) {
+    return { installs, message: `${intro} Homebrew isn't installed, so it installs ${installs[0].how} with code2pdf's own installer, in a terminal; that takes a few minutes.` };
+  }
   if (installs.length) {
     return { installs, message: `${intro} It installs ${installs.map((i) => i.how).join(" or ")}, in a terminal.` };
-  }
-  if (process.platform === "darwin") {
-    return { installs, message: `${intro} It installs with Homebrew, which isn't installed either: install Homebrew from brew.sh, then run "code2pdf: Install the Command-Line Tool".` };
   }
   return { installs, message: intro };
 }
@@ -424,8 +424,7 @@ async function offer({ installs, message }: ReturnType<typeof howToInstall>, rea
     void show("info", STILL_DOWNLOADING);
     return;
   }
-  const homebrew = !installs.length && process.platform === "darwin";
-  const buttons = [...installs.map((i) => i.label), ...(homebrew ? ["Open brew.sh"] : []), "Installation Guide"];
+  const buttons = [...installs.map((i) => i.label), "Installation Guide"];
   const choice = await vscode.window.showWarningMessage(message, ...buttons);
   record("installOffered", { reason, from, offered: buttons.join(", "), choice: choice ?? "dismissed" });
   const install = installs.find((i) => i.label === choice);
@@ -434,8 +433,6 @@ async function offer({ installs, message }: ReturnType<typeof howToInstall>, rea
   } else if (install) {
     installing = { command: install.label, started: Date.now() };
     runInTerminal(install.label.startsWith("Update") ? "Update code2pdf" : "Install code2pdf", install.command ?? "", install.asks);
-  } else if (choice === "Open brew.sh") {
-    void vscode.env.openExternal(vscode.Uri.parse("https://brew.sh"));
   } else if (choice === "Installation Guide") {
     void vscode.env.openExternal(vscode.Uri.parse(INSTALL_GUIDE));
   }

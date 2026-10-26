@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.3
+
+- macOS without Homebrew: the Install button now installs code2pdf just for you with code2pdf's
+  own installer, which gets Python, WeasyPrint and Pango from conda-forge: no sudo, and nothing
+  to sign. Before, there was only a link to brew.sh. A third of Mac sessions had no Homebrew.
+- Windows: when Windows refuses to run the downloaded code2pdf.exe, the message says that
+  antivirus or a security policy blocked it, instead of "spawn UNKNOWN".
+
 ## 2.2.2
 
 - A folder print that finds nothing now says why: code2pdf's default selection skips data, text
