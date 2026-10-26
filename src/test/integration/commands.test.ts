@@ -409,7 +409,7 @@ describe("code2pdf", () => {
             assert.match(downloadedTo[0] ?? "", /\\Programs\\code2pdf$/, "Install downloads the Windows build, with no terminal");
             assert.equal(sent.length, 0);
           } else {
-            assert.match(sent[0] ?? "", /^brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb'$|bash -s -- --user'$/);
+            assert.match(sent[0] ?? "", /^HOMEBREW_NO_ASK=1 brew install readbysearch\/tap\/code2pdf$|code2pdf_all\.deb'$|bash -s -- --user'$/);
             assert.ok(!fs.existsSync(pdf));
             installed = true;  // the terminal finished
           }

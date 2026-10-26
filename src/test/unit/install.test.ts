@@ -21,7 +21,7 @@ test("os-release", () => {
 });
 
 test("install: Homebrew where there is one, else the .deb, else install.sh without sudo", () => {
-  assert.equal(installCommand("darwin", true)?.command, "brew install readbysearch/tap/code2pdf");
+  assert.equal(installCommand("darwin", true)?.command, "HOMEBREW_NO_ASK=1 brew install readbysearch/tap/code2pdf", "no [y/n] question: the button was the answer");
   assert.match(installCommand("darwin", false)?.command ?? "", /\| bash -s -- --user'$/, "without Homebrew: code2pdf's installer, just for this user");
   assert.equal(installCommand("linux", true, parseOsRelease(UBUNTU_24))?.label, "Install with Homebrew");
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.command ?? "", /sudo apt install \/tmp\/code2pdf_all\.deb'$/);
@@ -36,13 +36,13 @@ test("install: Homebrew where there is one, else the .deb, else install.sh witho
   assert.match(installCommands("linux", false)[1].command ?? "", /bash -s -- --system'$/);
   assert.deepEqual(labels("darwin", true), ["Install with Homebrew"]);
   assert.deepEqual(labels("darwin", false), ["Install for Me (no sudo)"]);
-  assert.match(installCommand("darwin", true)?.asks ?? "", /type y in the terminal/, "Homebrew 7 asks before installing");
+  assert.equal(installCommand("darwin", true)?.asks, undefined, "Homebrew has nothing to ask with HOMEBREW_NO_ASK");
   assert.match(installCommand("linux", false, parseOsRelease(UBUNTU_24))?.asks ?? "", /password/);
 });
 
 test("update the way it was installed", () => {
   const found = (installKind: string, installDir = "") => ({ command: "code2pdf", version: "3.11", installKind, installDir });
-  assert.equal(updateCommand(found("Homebrew"), "/home/u")?.command, "brew upgrade readbysearch/tap/code2pdf");
+  assert.equal(updateCommand(found("Homebrew"), "/home/u")?.command, "HOMEBREW_NO_ASK=1 brew upgrade readbysearch/tap/code2pdf");
   assert.match(updateCommand(found("Debian package"), "/home/u")?.command ?? "", /apt install/);
   assert.match(updateCommand(found("install.sh", "/home/u/.local/share/code2pdf"), "/home/u")?.command ?? "", /--user'$/);
   assert.match(updateCommand(found("install.sh (conda-forge environment)", "/usr/local/share/code2pdf"), "/home/u")?.command ?? "", /--system'$/);

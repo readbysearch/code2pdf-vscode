@@ -20,8 +20,8 @@ ways to install it.
 **From VS Code.** Click Install on the extension's Get Started page, which opens when you install
 the extension, or run **code2pdf: Install the Command-Line Tool** from the Command Palette. If you
 print before installing it, the extension offers the same button. It picks the installer for your
-machine and runs it in a terminal, where you see what it does and answer its questions: Homebrew
-asks you to confirm, apt asks for your password. On Windows there's no terminal: it downloads
+machine and runs it in a terminal, where you see what it does and answer its questions, such as
+apt asking for your password. On Windows there's no terminal: it downloads
 code2pdf for Windows (about 40 MB) from its GitHub release into
 `%LOCALAPPDATA%\Programs\code2pdf`, checks it against its published SHA-256, and needs no
 administrator rights. When code2pdf is ready, VS Code says so, with **Print Now** if you were

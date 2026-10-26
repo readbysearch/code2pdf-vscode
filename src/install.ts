@@ -52,9 +52,10 @@ export function debWorks(release: OsRelease): boolean {
 const brew = (verb: "install" | "upgrade"): InstallCommand => ({
   label: verb === "install" ? "Install with Homebrew" : "Update with Homebrew",
   how: `with Homebrew (brew ${verb} readbysearch/tap/code2pdf)`,
-  command: `brew ${verb} readbysearch/tap/code2pdf`,
-  // Homebrew 7 asks before installing anything with dependencies
-  asks: "Homebrew lists what it will install and asks you to confirm: type y in the terminal.",
+  // Homebrew 7 asks before installing anything with dependencies; the Install button is the
+  // answer. People missed the question in the terminal: installs took 3 to 14 minutes and some
+  // clicked Install again. HOMEBREW_NO_ASK is ignored by older Homebrews, unlike the -y flag.
+  command: `HOMEBREW_NO_ASK=1 brew ${verb} readbysearch/tap/code2pdf`,
 });
 
 const deb = (verb: "Install" | "Update"): InstallCommand => ({

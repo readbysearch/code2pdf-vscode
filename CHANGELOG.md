@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.4
+
+- macOS: Install with Homebrew no longer waits for you to answer Homebrew's "Do you want to
+  proceed?" in the terminal: clicking Install is the answer. People missed the question, and
+  installs took 3 to 14 minutes instead of about 1.
+
 ## 2.2.3
 
 - macOS without Homebrew: the Install button now installs code2pdf just for you with code2pdf's
